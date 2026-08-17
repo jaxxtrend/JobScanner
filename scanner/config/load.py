@@ -27,6 +27,7 @@ _SETTINGS_REQUIRED = (
     "green",
     "redwords",
     "stopwords",
+    "resume_stopwords",
     "domain_markers",
 )
 _CHANNEL_REQUIRED = ("id", "name", "link", "relevance_score", "enabled")
@@ -46,7 +47,7 @@ def load_settings() -> dict[str, Any]:
     missing = [key for key in _SETTINGS_REQUIRED if key not in data]
     if missing:
         raise ValueError(f"settings.json missing keys: {', '.join(missing)}")
-    for list_key in ("keywords", "green", "redwords", "stopwords", "domain_markers"):
+    for list_key in ("keywords", "green", "redwords", "stopwords", "resume_stopwords", "domain_markers"):
         if not isinstance(data[list_key], list):
             raise ValueError(f"settings.json.{list_key} must be an array")
     return data

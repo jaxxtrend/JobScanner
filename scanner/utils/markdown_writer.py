@@ -11,10 +11,14 @@ _POST_RE = re.compile(r"^- Post: (\S+)", re.MULTILINE)
 _HEADING_RE = re.compile(r"^### (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) — ", re.MULTILINE)
 
 
-def format_salary(salary: int | None) -> str:
+def format_salary(salary: Any) -> str:
     if salary is None:
         return ""
-    return f"{salary} RUB"
+    amount = getattr(salary, "amount", None)
+    currency = getattr(salary, "currency", None)
+    if amount is None or not currency:
+        return ""
+    return f"{amount} {currency}"
 
 
 def render_card(card: dict[str, Any]) -> str:

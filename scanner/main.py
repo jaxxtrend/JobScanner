@@ -30,7 +30,7 @@ from config.load import (
 )
 from utils.cursors import last_id_for, load_cursors, save_cursors
 from utils.dedup_cache import load_seen_links, save_seen_links
-from utils.extract_salary import extract_salary
+from utils.extract_salary import Salary, extract_salary
 from utils.markdown_writer import merge_report
 from utils.rvc_parser import enrich_message_with_rvc
 from utils.telegraph_parser import (
@@ -145,7 +145,7 @@ def build_card(
     green: list[str],
     flags: list[str],
     links: list[str],
-    salary: int | None,
+    salary: Salary | None,
 ) -> dict[str, Any]:
     links_str = "\n".join(links[:5]) if links else ""
     return {
@@ -174,7 +174,8 @@ def try_accept_text(
     links: list[str],
 ) -> bool:
     full_lc = full_text.lower()
-    if any(kw.lower() in full_lc for kw in settings["stopwords"]):
+    reject_phrases = settings["stopwords"] + settings["resume_stopwords"]
+    if any(kw.lower() in full_lc for kw in reject_phrases):
         return False
     matched = get_unique_keywords(
         settings["keywords"], keyword_text.lower()[: settings["letters_limit"]]

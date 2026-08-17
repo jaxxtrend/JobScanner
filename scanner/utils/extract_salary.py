@@ -1,17 +1,35 @@
-"""Extract salary figures and convert to RUB using CBR daily rates."""
+"""Extract salary and keep USD/RUB/EUR as posted; convert other currencies to USD."""
 
 from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from functools import lru_cache
 
 import requests
 
 log = logging.getLogger(__name__)
 
+KEEP_CURRENCIES = frozenset({"USD", "EUR", "RUB"})
+
+_SYMBOL_TO_CODE = {
+    "USD": "USD", "$": "USD", "DOLLAR": "USD", "ДОЛЛАР": "USD",
+    "EUR": "EUR", "€": "EUR", "EURO": "EUR", "ЕВРО": "EUR",
+    "RUB": "RUB", "₽": "RUB", "R": "RUB", "РУБ": "RUB",
+    "KZT": "KZT", "ТЕНГЕ": "KZT",
+    "GBP": "GBP", "£": "GBP", "ФУНТ": "GBP",
+}
+
+
+@dataclass(frozen=True)
+class Salary:
+    amount: int
+    currency: str
+
 
 def get_dynamic_exchange_rates() -> dict[str, float]:
+    """CBR rates as RUB per 1 unit of currency."""
     url = "https://www.cbr-xml-daily.ru/daily_json.js"
     response = requests.get(url, timeout=10)
     response.raise_for_status()
@@ -29,11 +47,11 @@ def get_dynamic_exchange_rates() -> dict[str, float]:
     kzt = get_rate("KZT")
     gbp = get_rate("GBP")
     return {
-        "RUB": 1, "₽": 1, "R": 1, "РУБ": 1,
         "USD": usd, "$": usd, "DOLLAR": usd, "ДОЛЛАР": usd,
         "EUR": eur, "€": eur, "EURO": eur, "ЕВРО": eur,
         "KZT": kzt, "ТЕНГЕ": kzt,
         "GBP": gbp, "£": gbp, "ФУНТ": gbp,
+        "RUB": 1, "₽": 1, "R": 1, "РУБ": 1,
     }
 
 
@@ -46,6 +64,10 @@ def _get_exchange_rates() -> dict[str, float] | None:
     except (requests.RequestException, KeyError, ValueError) as exc:
         log.error("CBR exchange rates unavailable: %s", exc)
         return None
+
+
+def canonical_currency(token: str) -> str | None:
+    return _SYMBOL_TO_CODE.get(token.upper())
 
 
 def detect_currency(text: str) -> str:
@@ -83,7 +105,45 @@ def _is_non_salary_number(text: str, num_str: str) -> bool:
     return False
 
 
-def extract_salary(text: str) -> int | None:
+def _to_usd(amount: float, code: str, rates: dict[str, float] | None) -> float | None:
+    if code == "USD":
+        return amount
+    if rates is None:
+        log.error("Cannot convert %s to USD without CBR rates", code)
+        return None
+    usd_rub = rates.get("USD")
+    if usd_rub is None or usd_rub == 0:
+        log.error("Missing CBR USD rate")
+        return None
+    if code == "RUB":
+        return amount / usd_rub
+    other_rub = rates.get(code)
+    if other_rub is None:
+        log.error("Missing CBR rate for converting %s to USD", code)
+        return None
+    return amount * other_rub / usd_rub
+
+
+def _to_display_amount(
+    amount: float,
+    code: str,
+    rates: dict[str, float] | None,
+) -> tuple[float, str] | None:
+    """Keep USD/EUR/RUB; convert anything else to USD via CBR."""
+    if code in KEEP_CURRENCIES:
+        return amount, code
+    if rates is None:
+        log.error("Cannot convert %s to USD without CBR rates", code)
+        return None
+    other_rub = rates.get(code)
+    usd_rub = rates.get("USD")
+    if other_rub is None or usd_rub is None or usd_rub == 0:
+        log.error("Missing CBR rate for converting %s to USD", code)
+        return None
+    return amount * other_rub / usd_rub, "USD"
+
+
+def extract_salary(text: str) -> Salary | None:
     if not text:
         return None
 
@@ -101,7 +161,7 @@ def extract_salary(text: str) -> int | None:
     sep_p = r"(?:[-–—~]|до|от)"
     pattern = rf"(?i)({curr_p})?\s*{num_p}\s*{suf_p}\s*(?:{sep_p}\s*({curr_p})?\s*{num_p}\s*{suf_p})?\s*({curr_p})?"
     matches = re.findall(pattern, text_clean)
-    salaries_rub: list[float] = []
+    parsed: list[tuple[float, str]] = []
 
     is_salary_context = bool(re.search(
         r"(?i)\b(?:вилка|зарплата|зп|salary|compensation|оклад|gross|net|ставка)\b",
@@ -159,22 +219,36 @@ def extract_salary(text: str) -> int | None:
         if v1 < 100:
             continue
 
-        curr = (_c1 or _c2 or _c3 or default_currency).upper()
-        rub_aliases = {"RUB", "₽", "R", "РУБ"}
-        if rates is None:
-            if curr not in rub_aliases:
-                continue
-            rate = 1.0
-        else:
-            rate = rates.get(curr)
-            if rate is None:
-                continue
+        raw_curr = (_c1 or _c2 or _c3 or default_currency).upper()
+        code = canonical_currency(raw_curr)
+        if code is None:
+            continue
 
         final_val = (v1 + v2) / 2 if v2 else v1
-        if curr in ("USD", "EUR", "GBP", "$", "€") and final_val > 10000:
+        if code in ("USD", "EUR", "GBP") and final_val > 10000:
             final_val = final_val / 12
-        salaries_rub.append(final_val * rate)
 
-    if not salaries_rub:
+        displayed = _to_display_amount(final_val, code, rates)
+        if displayed is None:
+            continue
+        parsed.append(displayed)
+
+    if not parsed:
         return None
-    return int(round(sum(salaries_rub) / len(salaries_rub)))
+
+    currencies = {c for _, c in parsed}
+    if len(currencies) == 1:
+        currency = next(iter(currencies))
+        amount = sum(a for a, _ in parsed) / len(parsed)
+        return Salary(int(round(amount)), currency)
+
+    # Mixed keep-currencies on one post: one line, so convert all to USD.
+    usd_amounts: list[float] = []
+    for amount, currency in parsed:
+        converted = _to_usd(amount, currency, rates)
+        if converted is None:
+            continue
+        usd_amounts.append(converted)
+    if not usd_amounts:
+        return None
+    return Salary(int(round(sum(usd_amounts) / len(usd_amounts))), "USD")

@@ -20,7 +20,7 @@ The Telegram account used for login must already be subscribed to the channels l
 
 ## Config (edit JSON, not Python)
 
-- [`scanner/config/settings.json`](scanner/config/settings.json) — window, keyword lists, stopwords, domain markers, `rescan_hours`
+- [`scanner/config/settings.json`](scanner/config/settings.json) — window, keyword lists, stopwords, resume_stopwords, domain markers, `rescan_hours`
 - [`scanner/config/channels.json`](scanner/config/channels.json) — sources: `enabled`, `relevance_score`, `require_tags`, `category`
 
 Keywords are job titles. Stack and contract type are `green` (highlight only). A post with only `Remote` or `Python` does not pass.
