@@ -1,0 +1,148 @@
+{
+  "channels": [
+    {
+      "id": "1",
+      "name": "Работа в геймдеве",
+      "link": "https://t.me/gamedevjob",
+      "relevance_score": 5,
+      "enabled": true,
+      "category": "gamedev_cg",
+      "require_tags": []
+    },
+    {
+      "id": "2",
+      "name": "CG Jobs",
+      "link": "https://t.me/cgjobs",
+      "relevance_score": 5,
+      "enabled": true,
+      "category": "gamedev_cg",
+      "require_tags": []
+    },
+    {
+      "id": "3",
+      "name": "Jobs in GameDev & IT",
+      "link": "https://t.me/GameDev_and_Tech_vacancy",
+      "relevance_score": 5,
+      "enabled": true,
+      "category": "gamedev_cg",
+      "require_tags": []
+    },
+    {
+      "id": "4",
+      "name": "Ин Game Dev",
+      "link": "https://t.me/ingamedev",
+      "relevance_score": 5,
+      "enabled": true,
+      "category": "gamedev_cg",
+      "require_tags": []
+    },
+    {
+      "id": "5",
+      "name": "GameDev Jobs",
+      "link": "https://t.me/gamedev_jobs_ru",
+      "relevance_score": 5,
+      "enabled": true,
+      "category": "gamedev_cg",
+      "require_tags": []
+    },
+    {
+      "id": "6",
+      "name": "CG Freelance",
+      "link": "https://t.me/cgfreelance",
+      "relevance_score": 4,
+      "enabled": true,
+      "category": "freelance",
+      "require_tags": []
+    },
+    {
+      "id": "7",
+      "name": "GameDev Freelance",
+      "link": "https://t.me/gamedev1",
+      "relevance_score": 4,
+      "enabled": true,
+      "category": "freelance",
+      "require_tags": []
+    },
+    {
+      "id": "8",
+      "name": "Freelance GameDev",
+      "link": "https://t.me/freelancegamedev",
+      "relevance_score": 4,
+      "enabled": true,
+      "category": "freelance",
+      "require_tags": []
+    },
+    {
+      "id": "9",
+      "name": "Blender 3D Jobs",
+      "link": "https://t.me/blender3d_jobs",
+      "relevance_score": 4,
+      "enabled": true,
+      "category": "freelance",
+      "require_tags": []
+    },
+    {
+      "id": "10",
+      "name": "Blender Jobs",
+      "link": "https://t.me/blender_jobs",
+      "relevance_score": 4,
+      "enabled": true,
+      "category": "freelance",
+      "require_tags": []
+    },
+    {
+      "id": "11",
+      "name": "Tech Art",
+      "link": "https://t.me/tech_art",
+      "relevance_score": 3,
+      "enabled": true,
+      "category": "chats",
+      "require_tags": []
+    },
+    {
+      "id": "12",
+      "name": "Tech Artists",
+      "link": "https://t.me/techartists",
+      "relevance_score": 3,
+      "enabled": true,
+      "category": "chats",
+      "require_tags": []
+    },
+    {
+      "id": "13",
+      "name": "Unity 3D Jobs",
+      "link": "https://t.me/unity3d_jobs",
+      "relevance_score": 3,
+      "enabled": true,
+      "category": "chats",
+      "require_tags": []
+    },
+    {
+      "id": "14",
+      "name": "GameDev Chat",
+      "link": "https://t.me/gamedev_chat",
+      "relevance_score": 3,
+      "enabled": true,
+      "category": "chats",
+      "require_tags": ["#job", "#vacancy", "#lookingfor"]
+    },
+    {
+      "id": "15",
+      "name": "Remote Jobs Worldwide",
+      "link": "https://t.me/remotejobss",
+      "relevance_score": 4,
+      "enabled": true,
+      "category": "global_remote",
+      "require_tags": []
+    },
+    {
+      "id": "16",
+      "name": "Remote Work GameDev",
+      "link": "https://t.me/remotework_gamedev",
+      "relevance_score": 4,
+      "enabled": true,
+      "category": "global_remote",
+      "require_tags": []
+    }
+  ]
+}

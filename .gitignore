@@ -1,0 +1,17 @@
+jobs_release/
+
+.env
+sessions/
+scanner/sessions/
+scanner/state/
+state/
+logs/
+scanner/logs/
+output/*.md
+__pycache__/
+*.pyc
+*.session
+*.session-journal
+.tmp/
+.venv/
+venv/
