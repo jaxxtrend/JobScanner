@@ -21,11 +21,16 @@ The Telegram account used for login must already be subscribed to the channels l
 ## Config (edit JSON, not Python)
 
 - [`scanner/config/settings.json`](scanner/config/settings.json) — window, keyword lists, stopwords, resume_stopwords, domain markers, `rescan_hours`
-- [`scanner/config/channels.json`](scanner/config/channels.json) — sources: `enabled`, `relevance_score`, `require_tags`, `category`
+- [`scanner/config/channels.json`](scanner/config/channels.json) — list of `@usernames`. To skip a source, delete the line. Titles come from Telegram.
 
-Keywords are job titles. Stack and contract type are `green` (highlight only). A post with only `Remote` or `Python` does not pass.
+```json
+[
+  "@cgfreelance",
+  "@devjobs"
+]
+```
 
-Set `"enabled": false` to skip a dead username. Do not delete the row.
+Keywords in `settings.json` are job titles. Stack and contract type are `green` (highlight only).
 
 ## Run
 
@@ -35,7 +40,7 @@ From the repo root:
 python scanner/main.py
 python scanner/main.py --days 10
 python scanner/main.py --channel 1
-python scanner/main.py --channel 1-5
+python scanner/main.py --channel cgfreelance
 ```
 
 First login asks for phone number and Telegram code. Session file: `scanner/sessions/` (not committed).
@@ -49,7 +54,3 @@ First login asks for phone number and Telegram code. Session file: `scanner/sess
 ## Output
 
 `output/YYYY-MM-DD.md`. A second run on the same day merges cards by post URL and does not drop earlier cards. Edited posts that reappear update the existing card.
-
-## Scores
-
-`relevance_score` is a manual 0–10 rating of the source. Channels below `min_relevance` are not scanned. This does not rank individual vacancies.
