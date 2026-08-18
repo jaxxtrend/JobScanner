@@ -1,4 +1,4 @@
-"""JSON cache of vacancy links already written to reports."""
+"""JSON cache of vacancy and Telegram post URLs already written to reports."""
 
 from __future__ import annotations
 

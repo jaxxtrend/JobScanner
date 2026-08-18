@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import difflib
-import hashlib
 import logging
 import re
 import sys
@@ -170,9 +169,9 @@ def try_accept_text(
     source_key: str,
     settings: dict[str, Any],
     seen_links: set[str],
-    seen_text_hashes: set[str],
     accepted_texts: dict[str, list[str]],
     links: list[str],
+    post_url: str,
 ) -> bool:
     full_lc = full_text.lower()
     reject_phrases = settings["stopwords"] + settings["resume_stopwords"]
@@ -183,16 +182,15 @@ def try_accept_text(
     )
     if not matched:
         return False
-    if links:
-        primary = normalize_url_for_dedup(links[0])
-        if primary in seen_links:
-            return False
-        seen_links.add(primary)
-    else:
-        text_hash = hashlib.md5(full_text[:200].lower().encode()).hexdigest()
-        if text_hash in seen_text_hashes:
-            return False
-        seen_text_hashes.add(text_hash)
+    primary = normalize_url_for_dedup(links[0] if links else post_url)
+    post_key = normalize_url_for_dedup(post_url)
+    if not primary:
+        return False
+    if primary in seen_links or (post_key and post_key in seen_links):
+        return False
+    seen_links.add(primary)
+    if post_key:
+        seen_links.add(post_key)
     norm = normalize_text_for_sim(full_text)
     if is_near_duplicate(norm, accepted_texts.get(source_key, []), settings["near_dup_threshold"]):
         return False
@@ -208,7 +206,6 @@ async def iter_channel_messages(
     rescan_since: datetime,
     last_id: int | None,
     seen_links: set[str],
-    seen_text_hashes: set[str],
     accepted_texts: dict[str, list[str]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int | None]:
     results: list[dict[str, Any]] = []
@@ -271,19 +268,19 @@ async def iter_channel_messages(
                     job_matched = get_unique_keywords(
                         settings["keywords"], job_text.lower()[: settings["letters_limit"]]
                     )
+                    card_url = job_links[0] if job_links else f"{msg_url}#telegraph"
                     if not try_accept_text(
                         keyword_text=job_text,
                         full_text=job_text,
                         source_key=source_key,
                         settings=settings,
                         seen_links=seen_links,
-                        seen_text_hashes=seen_text_hashes,
                         accepted_texts=accepted_texts,
                         links=job_links,
+                        post_url=card_url,
                     ):
                         continue
                     passed += 1
-                    card_url = job_links[0] if job_links else f"{msg_url}#telegraph"
                     results.append(build_card(
                         date_value=msg.date,
                         source_name=source_name,
@@ -306,9 +303,9 @@ async def iter_channel_messages(
             source_key=source_key,
             settings=settings,
             seen_links=seen_links,
-            seen_text_hashes=seen_text_hashes,
             accepted_texts=accepted_texts,
             links=links,
+            post_url=msg_url,
         ):
             continue
 
@@ -351,25 +348,21 @@ async def scan_channel_with_retry(
     rescan_since: datetime,
     last_id: int | None,
     seen_links: set[str],
-    seen_text_hashes: set[str],
     accepted_texts: dict[str, list[str]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int | None]:
     links_snap = set(seen_links)
-    hashes_snap = set(seen_text_hashes)
     accepted_snap = {key: list(vals) for key, vals in accepted_texts.items()}
 
     def restore_dedup() -> None:
         seen_links.clear()
         seen_links.update(links_snap)
-        seen_text_hashes.clear()
-        seen_text_hashes.update(hashes_snap)
         accepted_texts.clear()
         accepted_texts.update({key: list(vals) for key, vals in accepted_snap.items()})
 
     try:
         return await iter_channel_messages(
             client, src, settings, date_from, rescan_since, last_id,
-            seen_links, seen_text_hashes, accepted_texts,
+            seen_links, accepted_texts,
         )
     except FloodWaitError as exc:
         log.warning("FloodWait %ss for %s — sleeping", exc.seconds, src["name"])
@@ -378,7 +371,7 @@ async def scan_channel_with_retry(
         try:
             return await iter_channel_messages(
                 client, src, settings, date_from, rescan_since, last_id,
-                seen_links, seen_text_hashes, accepted_texts,
+                seen_links, accepted_texts,
             )
         except Exception as retry_exc:
             restore_dedup()
@@ -465,7 +458,6 @@ async def scan_messages(
     cache_path = SESSIONS_DIR / "dedup_cache.json"
     cursors = load_cursors(cursors_path)
     seen_links = load_seen_links(cache_path)
-    seen_text_hashes: set[str] = set()
     accepted_texts: dict[str, list[str]] = {}
     results: list[dict[str, Any]] = []
     stats_list: list[dict[str, Any]] = []
@@ -478,7 +470,7 @@ async def scan_messages(
             first_run_channels += 1
         channel_results, stats, max_id = await scan_channel_with_retry(
             client, src, settings, date_from, rescan_since, last_id,
-            seen_links, seen_text_hashes, accepted_texts,
+            seen_links, accepted_texts,
         )
         results.extend(channel_results)
         stats_list.append(stats)

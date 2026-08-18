@@ -54,3 +54,5 @@ First login asks for phone number and Telegram code. Session file: `scanner/sess
 ## Output
 
 `output/YYYY-MM-DD.md`. A second run on the same day merges cards by post URL and does not drop earlier cards. Edited posts that reappear update the existing card.
+
+Dedup across days uses `scanner/sessions/dedup_cache.json`: the first vacancy URL in the text, or the Telegram post URL when there is no external link. The 48-hour rescan window therefore does not reprint the same cards on a later date.
