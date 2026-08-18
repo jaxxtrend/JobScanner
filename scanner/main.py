@@ -27,6 +27,7 @@ from config.load import (
     load_channels,
     load_env,
     load_settings,
+    parse_telegram_username,
 )
 from utils.cursors import last_id_for, load_cursors, save_cursors
 from utils.dedup_cache import load_seen_links, save_seen_links
@@ -219,6 +220,9 @@ async def iter_channel_messages(
     chat_type = src["type"]
     limit = 20000 if chat_type == "channel" else 10000
     chat = await client.get_entity(src["username"])
+    title = getattr(chat, "title", None) or getattr(chat, "first_name", None)
+    if title:
+        src["name"] = str(title)
     log.info("Scanning %s %s (%s) id %s", chat_type, src["name"], src["username"], chat.id)
 
     async for msg in client.iter_messages(chat, limit=limit):
@@ -421,8 +425,12 @@ async def scan_messages(
     channels_cfg = load_channels()
 
     if channel_id:
-        wanted = set(parse_channel_ids(channel_id))
-        channels_cfg = [ch for ch in channels_cfg if str(ch["id"]) in wanted]
+        wanted = {item.lower().lstrip("@") for item in parse_channel_ids(channel_id)}
+        channels_cfg = [
+            ch for ch in channels_cfg
+            if str(ch["id"]) in wanted
+            or parse_telegram_username(ch["link"]).lower() in wanted
+        ]
         if not channels_cfg:
             log.error("No channels matched --channel %s", channel_id)
             return
@@ -508,7 +516,11 @@ async def scan_messages(
 async def async_main() -> None:
     settings = load_settings()
     parser = argparse.ArgumentParser(description="Technical Artist vacancy scanner for Telegram")
-    parser.add_argument("--channel", type=str, help="Channel id or range from channels.json (e.g. 1-5 or 2,4)")
+    parser.add_argument(
+        "--channel",
+        type=str,
+        help="Username or 1-based index from channels.json (e.g. cgfreelance, 1, 1-3)",
+    )
     parser.add_argument(
         "--days",
         type=int,
@@ -519,6 +531,7 @@ async def async_main() -> None:
 
     api_id, api_hash, output_path = load_env()
     output_path.mkdir(parents=True, exist_ok=True)
+    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     session_file = SESSIONS_DIR / "my_account"
     client = TelegramClient(str(session_file), api_id, api_hash)
     async with client:

@@ -30,7 +30,6 @@ _SETTINGS_REQUIRED = (
     "resume_stopwords",
     "domain_markers",
 )
-_CHANNEL_REQUIRED = ("id", "name", "link", "relevance_score", "enabled")
 
 
 def _read_json(path: Path) -> Any:
@@ -53,28 +52,62 @@ def load_settings() -> dict[str, Any]:
     return data
 
 
+def parse_telegram_username(value: str) -> str:
+    username = value.strip()
+    if not username:
+        raise ValueError("Empty Telegram username")
+    if "t.me/" in username.lower():
+        username = username.split("t.me/", 1)[1]
+    username = username.split("/")[0].split("?")[0].lstrip("@")
+    if not username:
+        raise ValueError(f"Cannot parse Telegram username from: {value}")
+    return username
+
+
+def _normalize_channel(raw: Any, index: int) -> dict[str, Any]:
+    idx = str(index)
+    if isinstance(raw, str):
+        username = parse_telegram_username(raw)
+        return {
+            "id": idx,
+            "name": username,
+            "link": f"https://t.me/{username}",
+            "enabled": True,
+            "require_tags": [],
+        }
+    if isinstance(raw, dict):
+        user_raw = raw.get("user") or raw.get("username") or raw.get("link")
+        if not user_raw:
+            raise ValueError(
+                f"channels.json[{index}] needs a username string or "
+                "object with user/username/link"
+            )
+        username = parse_telegram_username(str(user_raw))
+        tags = raw.get("tags") or raw.get("require_tags") or []
+        if not isinstance(tags, list):
+            raise ValueError(f"channels.json[{index}].tags must be an array")
+        enabled = raw.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError(f"channels.json[{index}].enabled must be a boolean")
+        return {
+            "id": str(raw.get("id") or idx),
+            "name": str(raw.get("name") or username),
+            "link": f"https://t.me/{username}",
+            "enabled": enabled,
+            "require_tags": [str(t) for t in tags],
+        }
+    raise ValueError(f"channels.json[{index}] must be a string or object")
+
+
 def load_channels() -> list[dict[str, Any]]:
     data = _read_json(CONFIG_DIR / "channels.json")
-    if not isinstance(data, dict) or "channels" not in data:
-        raise ValueError("channels.json must contain a 'channels' array")
-    channels = data["channels"]
-    if not isinstance(channels, list):
-        raise ValueError("channels.json.channels must be an array")
-    result: list[dict[str, Any]] = []
-    for i, raw in enumerate(channels):
-        if not isinstance(raw, dict):
-            raise ValueError(f"channels.json.channels[{i}] must be an object")
-        missing = [key for key in _CHANNEL_REQUIRED if key not in raw]
-        if missing:
-            raise ValueError(f"channels.json.channels[{i}] missing keys: {', '.join(missing)}")
-        channel = dict(raw)
-        channel.setdefault("category", "")
-        tags = channel.get("require_tags") or []
-        if not isinstance(tags, list):
-            raise ValueError(f"channels.json.channels[{i}].require_tags must be an array")
-        channel["require_tags"] = [str(t) for t in tags]
-        result.append(channel)
-    return result
+    if isinstance(data, list):
+        raw_list = data
+    elif isinstance(data, dict) and isinstance(data.get("channels"), list):
+        raw_list = data["channels"]
+    else:
+        raise ValueError("channels.json must be an array of @usernames")
+    return [_normalize_channel(raw, i) for i, raw in enumerate(raw_list, start=1)]
 
 
 def load_env() -> tuple[int, str, Path]:

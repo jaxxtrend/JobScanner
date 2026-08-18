@@ -1,58 +1,16 @@
-{
-  "channels": [
-    {
-      "id": "1",
-      "name": "CG Freelance",
-      "link": "https://t.me/cgfreelance",
-      "relevance_score": 5,
-      "enabled": true,
-      "category": "freelance",
-      "require_tags": []
-    },
-    {
-      "id": "2",
-      "name": "Работа в геймдеве",
-      "link": "https://t.me/devjobs",
-      "relevance_score": 5,
-      "enabled": true,
-      "category": "gamedev_cg",
-      "require_tags": []
-    },
-    {
-      "id": "3",
-      "name": "Job for GameDev",
-      "link": "https://t.me/forgamedev",
-      "relevance_score": 5,
-      "enabled": true,
-      "category": "gamedev_cg",
-      "require_tags": []
-    },
-    {
-      "id": "4",
-      "name": "Работа в геймдеве (gamedevjob)",
-      "link": "https://t.me/gamedevjob",
-      "relevance_score": 5,
-      "enabled": true,
-      "category": "gamedev_cg",
-      "require_tags": []
-    },
-    {
-      "id": "5",
-      "name": "CG AI Freelance",
-      "link": "https://t.me/cgAIFreelance",
-      "relevance_score": 4,
-      "enabled": true,
-      "category": "freelance",
-      "require_tags": []
-    },
-    {
-      "id": "6",
-      "name": "Remote IT",
-      "link": "https://t.me/remoteit",
-      "relevance_score": 3,
-      "enabled": true,
-      "category": "it_remote",
-      "require_tags": []
-    }
-  ]
-}
+[
+  "@cgfreelance",
+  "@devjobs",
+  "@forgamedev",
+  "@gamedevjob",
+  "@cgAIFreelance",
+  "@remoteit",
+  "@young_gamedev",
+  "@GameDev_and_Tech_vacancy",
+  "@gamedev_ai_jobs",
+  "@qa_jobs_gamedev",
+  "@Gamedevjobs",
+  "@rabota_v_gamedeve",
+  "@GameDEV",
+  "@gdjobs"
+]
