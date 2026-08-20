@@ -13,6 +13,18 @@
         "^[💻🎮📱🌐🐍☕🤖]"
       ],
       "min_blocks": 2
+    },
+    {
+      "id": "linkedin_job_bullets",
+      "description": "Forgamedev-style: 🔹Role or markdown [🔹Role](linkedin.com/jobs/...) per vacancy",
+      "start_line": [
+        "^🔹\\s*\\[.+\\]\\(https?://[^\\s)]+\\)",
+        "^\\[🔹[^\\]]*\\]\\(https?://[^\\s)]+\\)",
+        "^🔹\\s+.+(https?://\\S*linkedin\\.com/jobs/\\S*)",
+        "^[•\\-\\*]\\s*.+\\(https?://\\S*linkedin\\.com/jobs/\\S*\\)"
+      ],
+      "skip_line": [],
+      "min_blocks": 2
     }
   ]
 }

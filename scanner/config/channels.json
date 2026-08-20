@@ -1,7 +1,10 @@
 [
   "@cgfreelance",
   "@devjobs",
-  "@forgamedev",
+  {
+    "username": "@forgamedev",
+    "digest_pattern": "linkedin_job_bullets"
+  },
   "@gamedevjob",
   "@cgAIFreelance",
   "@remoteit",
