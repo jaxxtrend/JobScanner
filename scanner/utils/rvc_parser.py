@@ -82,23 +82,32 @@ def vacancy_to_text(data: dict[str, Any]) -> str:
     return "\n\n".join(part for part in parts if part)
 
 
+def iter_rvc_vacancies(content: str) -> list[tuple[str, str]]:
+    """Return (vacancy_url, full_text) for each RVC link in the message."""
+    results: list[tuple[str, str]] = []
+    for url in extract_rvc_links_from_message(content):
+        slug = slug_from_rvc_url(url)
+        if not slug:
+            continue
+        data = fetch_rvc_vacancy(slug)
+        if not data:
+            continue
+        full_text = vacancy_to_text(data)
+        if not full_text:
+            continue
+        log.info(
+            "Loaded RVC description: %s — %s",
+            data.get("position") or data.get("keyCompetency") or "N/A",
+            data.get("companyName") or "N/A",
+        )
+        results.append((url, full_text))
+    return results
+
+
 def enrich_message_with_rvc(content: str) -> tuple[str, dict[str, Any] | None]:
-    rvc_links = extract_rvc_links_from_message(content)
-    if not rvc_links:
+    vacancies = iter_rvc_vacancies(content)
+    if not vacancies:
         return content, None
-    slug = slug_from_rvc_url(rvc_links[0])
-    if not slug:
-        return content, None
-    data = fetch_rvc_vacancy(slug)
-    if not data:
-        return content, None
-    full_text = vacancy_to_text(data)
-    if not full_text:
-        return content, None
+    url, full_text = vacancies[0]
     enriched = f"{content}\n\n--- RVC ---\n{full_text}"
-    log.info(
-        "Loaded RVC description: %s — %s",
-        data.get("position") or data.get("keyCompetency") or "N/A",
-        data.get("companyName") or "N/A",
-    )
-    return enriched, data
+    return enriched, {"url": url, "text": full_text}
