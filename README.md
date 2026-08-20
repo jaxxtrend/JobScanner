@@ -2,66 +2,79 @@
 
 Telegram scanner for **Technical Artist / pipeline / real-time optimization** vacancies.
 
-It reads channels you already follow, filters posts with JSON keyword lists, and writes a daily Markdown report. Tunable data lives in repo-root `config/` — not buried in Python.
+Reads channels you already follow, filters posts with JSON keyword lists, writes a daily Markdown report. Tunable data lives in repo-root [`config/`](config/) — not in Python. Runtime data lives in [`cache/`](cache/) (created on first run, gitignored).
 
-## How it works
+## Quick start
 
-```text
-config/channels.json  →  Telegram API  →  per message:
-  1. Telegraph page?     → split into jobs, filter each
-  2. RVC vacancy URLs?   → one candidate per link (API text)
-  3. Channel has digest binding? → apply that one pattern, filter each block
-  4. Else                → whole post as one candidate
-  → keywords / stopwords / resume_stopwords / near-dup / URL dedup
-  → output/YYYY-MM-DD.md
-```
-
-**Pass** means the candidate matched at least one `keywords` entry, did not hit `stopwords` / `resume_stopwords`, and is not a near-duplicate of an already accepted card.
-
-Report line per source:
-
-`ok @channel — N passed / M posts / D domain`
-
-| Field | Meaning |
-| --- | --- |
-| `posts` | Messages in the scan window with text |
-| `domain` | Posts that contain a `domain_markers` phrase (gamedev / Unity / …) — topic signal, not web domains |
-| `passed` | Vacancies that became cards |
-
-## Setup
-
-```bash
+```powershell
 pip install -r requirements.txt
 copy .env.example .env
+# fill TG_API_ID and TG_API_HASH from https://my.telegram.org/auth
+
+.\run.ps1
+.\run.ps1 --channel offerclaw
+.\run.ps1 --days 10
 ```
 
-Optional local venv (used automatically by `run.ps1`):
+`run.ps1` prefers `.venv\Scripts\python.exe` when present, otherwise `python` from PATH.
+
+Optional venv:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
 ```
 
-Fill `.env`:
+The Telegram account must already be subscribed to every channel in [`config/channels.json`](config/channels.json).
 
-- `TG_API_ID` and `TG_API_HASH` from [my.telegram.org](https://my.telegram.org/auth)
-- `OUTPUT_PATH` — optional; defaults to `output/` in the repo
+## How it works
 
-The Telegram account used for login must already be subscribed to every channel in [`config/channels.json`](config/channels.json).
+```text
+config/channels.json  →  Telegram API  →  per message:
+  1. Telegraph page?              → split into jobs, filter each
+  2. RVC vacancy URLs?            → one candidate per link (API text)
+  3. Channel has digest binding?  → apply that one pattern, filter each block
+  4. Else                         → whole post as one candidate
+  → keywords / stopwords / resume_stopwords / near-dup / URL dedup
+  → output/YYYY-MM-DD.md
+```
 
-Session file after first login: `cache/sessions/` (not committed). The `cache/` tree is created automatically on first run.
+**Pass** = matched at least one `keywords` entry, no `stopwords` / `resume_stopwords`, not a near-duplicate of an already accepted card.
 
-## Config (edit JSON under `config/`)
+Source line in the report:
+
+`ok @channel — N passed / M posts / D domain`
+
+| Field | Meaning |
+| --- | --- |
+| `posts` | Messages in the scan window with text |
+| `domain` | Posts containing a `domain_markers` phrase (topic signal, not web domains) |
+| `passed` | Vacancies that became cards |
+
+## Layout
+
+```text
+config/                 # settings, channels, digest patterns
+cache/                  # auto-created on first run (gitignored)
+  sessions/             # Telegram session + dedup_cache.json
+  state/                # cursors.json
+  logs/                 # scan_*.log + suspicious_digests_*.md
+run.ps1                 # Windows launcher
+scanner/                # Python code
+output/                 # daily Markdown reports
+.env / .env.example
+requirements.txt
+```
+
+## Config (`config/`)
 
 | File | Who edits | Role |
 | --- | --- | --- |
-| [`config/settings.json`](config/settings.json) | you | Window, keywords, green/red, stopwords, resume_stopwords, domain markers |
-| [`config/channels.json`](config/channels.json) | you | Sources as clickable `https://t.me/...` links |
-| [`config/digest_patterns.json`](config/digest_patterns.json) | AI agent (via suspicious log) | Digest split patterns + per-channel bindings |
+| [`settings.json`](config/settings.json) | you | Window, keywords, green/red, stopwords, resume_stopwords, domain markers |
+| [`channels.json`](config/channels.json) | you | Sources as `https://t.me/...` links |
+| [`digest_patterns.json`](config/digest_patterns.json) | AI agent (via suspicious log) | Split patterns + per-channel `bindings` |
 
 ### Channels
-
-Plain list of Telegram links (easy to open in the browser):
 
 ```json
 [
@@ -71,16 +84,16 @@ Plain list of Telegram links (easy to open in the browser):
 ]
 ```
 
-Objects are still allowed for rare flags (`enabled`, `require_tags`) — not for digest patterns.
+Objects are allowed only for rare flags (`enabled`, `require_tags`) — not for digest patterns.
 
 ### Filters (`settings.json`)
 
 | List | Role |
 | --- | --- |
-| `keywords` | Job titles that must appear (required to pass) |
-| `green` | Stack / contract highlights only (shown on the card, does not gate pass) |
+| `keywords` | Required job-title matches to pass |
+| `green` | Stack / contract highlights on the card (does not gate pass) |
 | `redwords` | Flags on the card (does not reject) |
-| `stopwords` | Reject the candidate |
+| `stopwords` | Reject |
 | `resume_stopwords` | Reject resume / “looking for work” posts |
 | `domain_markers` | Count toward the `domain` stat only |
 
@@ -88,7 +101,7 @@ Also: `last_days`, `rescan_hours`, `letters_limit`, `near_dup_threshold`, `group
 
 ### Digest patterns (internal)
 
-Some channels post **several vacancies in one message**. Definitions and bindings live only in `digest_patterns.json`:
+Multi-vacancy digests are split only for channels listed in `bindings`:
 
 ```json
 {
@@ -100,85 +113,52 @@ Some channels post **several vacancies in one message**. Definitions and binding
 }
 ```
 
-- A channel uses **only** the pattern named in `bindings` (no try-all over every pattern).
-- Channels without a binding are never digest-split (Telegraph / RVC still apply).
-- You normally do **not** edit this file by hand.
+- Only the bound pattern is applied (no try-all).
+- No binding → no digest split (Telegraph / RVC still work).
+- Do not edit this file by hand for day-to-day use.
 
-**When a multi-job digest fails to split** (post has 2+ job-board vacancy URLs: LinkedIn jobs, OfferClaw vacancy, Greenhouse, …):
+**Pattern miss** (post has 2+ job-board vacancy URLs and the bound pattern failed or is missing):
 
 1. Console WARNING  
-2. Full post appended to `cache/logs/suspicious_digests_YYYY-MM-DD.md`  
-3. **Pattern alerts** section in the daily Markdown report  
+2. Full post → `cache/logs/suspicious_digests_YYYY-MM-DD.md`  
+3. **Pattern alerts** in the daily report  
 
-Hand that suspicious log to an **AI agent** (e.g. Cursor). The agent should analyze the failed posts, add/fix a pattern, and update `bindings` in `config/digest_patterns.json`. The scanner itself does not call AI at runtime.
+Hand that suspicious log to an **AI agent** (e.g. Cursor). The agent analyzes the posts, adds/fixes a pattern, and updates `bindings` in `config/digest_patterns.json`. The scanner does not call AI at runtime.
 
-Ordinary single vacancies with portfolio / YouTube / forms links are **not** treated as digests.
+Single vacancies with portfolio / YouTube / forms links are not treated as digests.
 
 **Telegraph** (`telegra.ph`) and **RVC** (`app.rvc.global/vacancy/...`) have their own splitters.
-
-## Run
-
-From the repo root (preferred on Windows):
-
-```powershell
-.\run.ps1
-.\run.ps1 -Channel offerclaw
-.\run.ps1 --days 10
-.\run.ps1 --channel 1
-```
-
-`run.ps1` uses `.venv\Scripts\python.exe` when present, otherwise `python` from PATH, and forwards all args to `scanner/main.py`.
-
-Equivalent:
-
-```bash
-python scanner/main.py
-python scanner/main.py --channel cgfreelance
-```
-
-`--channel` accepts a username, a 1-based index from `channels.json`, or a range like `1-3`.
 
 ## Scan window
 
 | Case | Window |
 | --- | --- |
-| Channel without a cursor | last `last_days` days |
-| Channel with a cursor | new message ids **plus** the last `rescan_hours` (48) so recent edits are seen |
+| No cursor yet | last `last_days` days |
+| Cursor exists | new message ids **plus** last `rescan_hours` (48) for edits |
 
-Cursors: `cache/state/cursors.json` (gitignored).
+Cursors: `cache/state/cursors.json`.
 
 ## Output
 
-- Daily report: `output/YYYY-MM-DD.md`
-- Same-day re-run **merges** cards by post URL
-- Dedup across days: `cache/sessions/dedup_cache.json`
-- Scan logs: `cache/logs/scan_*.log`
-- Suspicious digests (for AI pattern updates): `cache/logs/suspicious_digests_YYYY-MM-DD.md`
+| Path | Content |
+| --- | --- |
+| `output/YYYY-MM-DD.md` | Daily report (same-day re-run merges by post URL) |
+| `cache/sessions/dedup_cache.json` | Cross-day URL dedup |
+| `cache/logs/scan_*.log` | Run logs |
+| `cache/logs/suspicious_digests_*.md` | Failed digests for AI pattern updates |
 
-### Report sections
+Report sections: **Sources** → **Pattern alerts** (if any) → **Vacancies**.
 
-1. **Sources** — per-channel status and counters  
-2. **Pattern alerts** — multi-job digests that failed to split (if any)  
-3. **Vacancies** — cards with post link, salary, keywords, green, flags, links, text  
+## Env
 
-## Layout
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `TG_API_ID` | yes | from [my.telegram.org](https://my.telegram.org/auth) |
+| `TG_API_HASH` | yes | same |
+| `OUTPUT_PATH` | no | defaults to `output/` |
 
-```text
-config/                 # user + agent JSON (settings, channels, digest patterns)
-cache/                  # created on first run (sessions, state, logs)
-run.ps1                 # Windows launcher
-scanner/                # Python code (load.py under scanner/config/)
-output/                 # daily Markdown reports
-```
+`--channel` accepts a username, a 1-based index from `channels.json`, or a range like `1-3`.
 
-`cache/` layout:
+## Local-only
 
-```text
-cache/sessions/         # Telegram session + dedup cache
-cache/state/            # cursors
-cache/logs/             # scan + suspicious digest logs
-```
-
-## Local-only paths
-
-`jobs_release/` is a local example from another search profile. It is gitignored and is not part of this repository.
+`jobs_release/` is a local example from another search profile (gitignored, not part of the repo).
