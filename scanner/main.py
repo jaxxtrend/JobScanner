@@ -32,7 +32,7 @@ from config.load import (
 from utils.cursors import last_id_for, load_cursors, save_cursors
 from utils.dedup_cache import load_seen_links, save_seen_links
 from utils.extract_salary import Salary, extract_salary
-from utils.job_splitter import is_digest_candidate, split_digest
+from utils.job_splitter import is_multi_job_digest, split_digest
 from utils.markdown_writer import merge_report
 from utils.rvc_parser import enrich_message_with_rvc, iter_rvc_vacancies
 from utils.suspicious_digests import append_suspicious_digest, pattern_alert_row
@@ -313,54 +313,53 @@ async def iter_channel_messages(
                 "post_url": rvc_url,
             })
 
-        if is_digest_candidate(content):
-            blocks, matched_id = split_digest(
-                content,
-                digest_patterns,
-                src.get("digest_pattern"),
+        blocks, matched_id = split_digest(
+            content,
+            digest_patterns,
+            src.get("digest_pattern"),
+        )
+        if blocks is not None:
+            log.info(
+                "Digest split @%s with pattern %s into %s blocks",
+                str(src["username"]).lstrip("@"),
+                matched_id,
+                len(blocks),
             )
-            if blocks is None:
-                reason = "no_pattern" if not digest_patterns else "split_failed"
-                log.warning(
-                    "@%s pattern miss (%s) — see suspicious digests log",
-                    str(src["username"]).lstrip("@"),
-                    reason,
-                )
-                log_path = append_suspicious_digest(
-                    LOGS_DIR,
-                    run_time,
-                    username=str(src["username"]),
-                    post_url=msg_url,
-                    reason=reason,
-                    text=content,
-                )
-                pattern_alerts.append(pattern_alert_row(
-                    username=str(src["username"]),
-                    post_url=msg_url,
-                    reason=reason,
-                    log_path=log_path,
-                ))
-            else:
-                log.info(
-                    "Digest split @%s with pattern %s into %s blocks",
-                    str(src["username"]).lstrip("@"),
-                    matched_id,
-                    len(blocks),
-                )
-                for index, block in enumerate(blocks, start=1):
-                    block_links = extract_links_from_text(block)
-                    primary = normalize_url_for_dedup(block_links[0]) if block_links else ""
-                    if primary and primary in covered_urls:
-                        continue
-                    if primary:
-                        covered_urls.add(primary)
-                    card_url = block_links[0] if block_links else f"{msg_url}#{index}"
-                    candidates.append({
-                        "keyword_text": block,
-                        "full_text": block,
-                        "links": block_links,
-                        "post_url": card_url,
-                    })
+            for index, block in enumerate(blocks, start=1):
+                block_links = extract_links_from_text(block)
+                primary = normalize_url_for_dedup(block_links[0]) if block_links else ""
+                if primary and primary in covered_urls:
+                    continue
+                if primary:
+                    covered_urls.add(primary)
+                card_url = block_links[0] if block_links else f"{msg_url}#{index}"
+                candidates.append({
+                    "keyword_text": block,
+                    "full_text": block,
+                    "links": block_links,
+                    "post_url": card_url,
+                })
+        elif is_multi_job_digest(content):
+            reason = "no_pattern" if not digest_patterns else "split_failed"
+            log.warning(
+                "@%s pattern miss (%s) — see suspicious digests log",
+                str(src["username"]).lstrip("@"),
+                reason,
+            )
+            log_path = append_suspicious_digest(
+                LOGS_DIR,
+                run_time,
+                username=str(src["username"]),
+                post_url=msg_url,
+                reason=reason,
+                text=content,
+            )
+            pattern_alerts.append(pattern_alert_row(
+                username=str(src["username"]),
+                post_url=msg_url,
+                reason=reason,
+                log_path=log_path,
+            ))
         elif not candidates:
             enriched, _rvc = enrich_message_with_rvc(content)
             links = extract_links_from_text(content)

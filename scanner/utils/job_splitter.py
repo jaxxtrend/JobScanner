@@ -7,21 +7,41 @@ from typing import Any
 
 from utils.url_helpers import extract_links_from_text
 
-_BULLET_LINE = re.compile(r"^[•\-\*]\s+")
+# URLs that usually mean a concrete vacancy card (not portfolio/company page).
+_JOB_BOARD_MARKERS = (
+    "linkedin.com/jobs/",
+    "offerclaw.app/vacancy/",
+    "greenhouse.io/",
+    "jobs.lever.co/",
+    "lever.co/",
+    "workable.com/",
+    "hh.ru/vacancy",
+    "getmatch.ru/vacancies/",
+    "wantapply.com/",
+    "app.rvc.global/vacancy/",
+    "careers.",
+)
+
+
+def job_board_link_count(text: str) -> int:
+    if not text:
+        return 0
+    count = 0
+    for url in extract_links_from_text(text):
+        low = url.lower()
+        if any(marker in low for marker in _JOB_BOARD_MARKERS):
+            count += 1
+    return count
+
+
+def is_multi_job_digest(text: str) -> bool:
+    """True when the post looks like several vacancy cards, not one job with extra links."""
+    return job_board_link_count(text) >= 2
 
 
 def is_digest_candidate(text: str) -> bool:
-    if not text:
-        return False
-    links = extract_links_from_text(text)
-    if len(links) < 2:
-        return False
-    lines = text.splitlines()
-    bullet_lines = sum(1 for line in lines if _BULLET_LINE.match(line.strip()))
-    lines_with_url = sum(
-        1 for line in lines if "http://" in line.lower() or "https://" in line.lower()
-    )
-    return bullet_lines >= 2 or lines_with_url >= 2
+    """Backward-compatible alias used by older call sites."""
+    return is_multi_job_digest(text)
 
 
 def _compile_patterns(raw_list: list[str]) -> list[re.Pattern[str]]:
