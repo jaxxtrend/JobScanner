@@ -89,19 +89,16 @@ def split_digest(
     patterns: list[dict[str, Any]],
     pattern_id: str | None = None,
 ) -> tuple[list[str] | None, str | None]:
-    """Return (blocks, matched_pattern_id) or (None, None) on miss."""
-    if not text or not patterns:
+    """Split using exactly one pattern id. No pattern id → no split."""
+    if not text or not pattern_id or not patterns:
         return None, None
 
-    ordered = patterns
-    if pattern_id:
-        preferred = [p for p in patterns if p.get("id") == pattern_id]
-        rest = [p for p in patterns if p.get("id") != pattern_id]
-        ordered = preferred + rest
+    pattern = next((p for p in patterns if p.get("id") == pattern_id), None)
+    if pattern is None:
+        return None, None
 
-    for pattern in ordered:
-        min_blocks = int(pattern.get("min_blocks") or 2)
-        blocks = split_with_pattern(text, pattern)
-        if len(blocks) >= min_blocks:
-            return blocks, str(pattern.get("id") or "")
+    min_blocks = int(pattern.get("min_blocks") or 2)
+    blocks = split_with_pattern(text, pattern)
+    if len(blocks) >= min_blocks:
+        return blocks, pattern_id
     return None, None

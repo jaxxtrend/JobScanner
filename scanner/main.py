@@ -24,7 +24,7 @@ from config.load import (
     SESSIONS_DIR,
     STATE_DIR,
     load_channels,
-    load_digest_patterns,
+    load_digest_config,
     load_env,
     load_settings,
     parse_telegram_username,
@@ -211,6 +211,7 @@ async def iter_channel_messages(
     seen_links: set[str],
     accepted_texts: dict[str, list[str]],
     digest_patterns: list[dict[str, Any]],
+    digest_bindings: dict[str, str],
     pattern_alerts: list[dict[str, Any]],
     run_time: datetime,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int | None]:
@@ -227,6 +228,7 @@ async def iter_channel_messages(
     if title:
         src["name"] = str(title)
     log.info("Scanning %s %s (%s) id %s", chat_type, src["name"], src["username"], chat.id)
+    channel_pattern = digest_bindings.get(parse_telegram_username(str(src["username"])).lower())
 
     async for msg in client.iter_messages(chat, limit=limit):
         if should_stop_iterating(msg.id, msg.date, last_id, date_from, rescan_since):
@@ -316,7 +318,7 @@ async def iter_channel_messages(
         blocks, matched_id = split_digest(
             content,
             digest_patterns,
-            src.get("digest_pattern"),
+            channel_pattern,
         )
         if blocks is not None:
             log.info(
@@ -340,7 +342,7 @@ async def iter_channel_messages(
                     "post_url": card_url,
                 })
         elif is_multi_job_digest(content):
-            reason = "no_pattern" if not digest_patterns else "split_failed"
+            reason = "no_pattern" if not channel_pattern else "split_failed"
             log.warning(
                 "@%s pattern miss (%s) — see suspicious digests log",
                 str(src["username"]).lstrip("@"),
@@ -428,6 +430,7 @@ async def scan_channel_with_retry(
     seen_links: set[str],
     accepted_texts: dict[str, list[str]],
     digest_patterns: list[dict[str, Any]],
+    digest_bindings: dict[str, str],
     pattern_alerts: list[dict[str, Any]],
     run_time: datetime,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int | None]:
@@ -445,7 +448,8 @@ async def scan_channel_with_retry(
     try:
         return await iter_channel_messages(
             client, src, settings, date_from, rescan_since, last_id,
-            seen_links, accepted_texts, digest_patterns, pattern_alerts, run_time,
+            seen_links, accepted_texts, digest_patterns, digest_bindings,
+            pattern_alerts, run_time,
         )
     except FloodWaitError as exc:
         log.warning("FloodWait %ss for %s — sleeping", exc.seconds, src["name"])
@@ -454,7 +458,8 @@ async def scan_channel_with_retry(
         try:
             return await iter_channel_messages(
                 client, src, settings, date_from, rescan_since, last_id,
-                seen_links, accepted_texts, digest_patterns, pattern_alerts, run_time,
+                seen_links, accepted_texts, digest_patterns, digest_bindings,
+                pattern_alerts, run_time,
             )
         except Exception as retry_exc:
             restore_dedup()
@@ -499,7 +504,7 @@ async def scan_messages(
     date_from = datetime.now(timezone.utc) - timedelta(days=days)
     rescan_since = datetime.now(timezone.utc) - timedelta(hours=settings["rescan_hours"])
     channels_cfg = load_channels()
-    digest_patterns = load_digest_patterns()
+    digest_bindings, digest_patterns = load_digest_config()
     run_time = datetime.now()
     pattern_alerts: list[dict[str, Any]] = []
 
@@ -535,7 +540,6 @@ async def scan_messages(
             "link": group_info["link"],
             "type": chat_type,
             "require_tags": group_info.get("require_tags") or [],
-            "digest_pattern": group_info.get("digest_pattern"),
             "category": group_info.get("category", ""),
         })
 
@@ -557,7 +561,8 @@ async def scan_messages(
             first_run_channels += 1
         channel_results, stats, max_id = await scan_channel_with_retry(
             client, src, settings, date_from, rescan_since, last_id,
-            seen_links, accepted_texts, digest_patterns, pattern_alerts, run_time,
+            seen_links, accepted_texts, digest_patterns, digest_bindings,
+            pattern_alerts, run_time,
         )
         results.extend(channel_results)
         stats_list.append(stats)
