@@ -36,15 +36,11 @@ Keywords in `settings.json` are job titles. Stack and contract type are `green` 
 
 ### Digest patterns
 
-Multi-link digests are split with patterns from `digest_patterns.json`. Each block is filtered on its own (keywords / stopwords / dedup). RVC vacancy links are also handled one card per URL.
+The scanner always tries patterns from `digest_patterns.json`. If a pattern yields 2+ blocks, each block is filtered on its own.
 
-If a post looks like a digest but no pattern splits it, the scanner does **not** accept the whole post. It:
+Alerts (`suspicious_digests_*.md` + **Pattern alerts**) fire only when the post has **2+ job-board vacancy URLs** (LinkedIn jobs, OfferClaw vacancy, Greenhouse, etc.) and no pattern splits it. Ordinary single vacancies with portfolio/YouTube/forms links are not treated as digests.
 
-1. logs a WARNING
-2. appends the full post to `scanner/logs/suspicious_digests_YYYY-MM-DD.md`
-3. adds a **Pattern alerts** section to the daily Markdown report
-
-Pass that suspicious log to an agent and ask to update `digest_patterns.json` (and optionally set `digest_pattern` on the channel).
+Pass the suspicious log to an agent to update `digest_patterns.json` (and optionally set `digest_pattern` on the channel). RVC vacancy links are handled one card per URL.
 ## Run
 
 From the repo root:
