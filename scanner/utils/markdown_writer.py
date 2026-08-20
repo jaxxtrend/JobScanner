@@ -89,6 +89,33 @@ def _card_sort_key(block: str) -> str:
     return ""
 
 
+def render_pattern_alerts(alerts: list[dict[str, Any]]) -> str:
+    if not alerts:
+        return ""
+    lines = [
+        "## Pattern alerts",
+        "",
+        "Digest posts could not be split. Update `scanner/config/digest_patterns.json` "
+        "using the suspicious digests log (pass the log to an agent).",
+        "",
+    ]
+    seen_logs: set[str] = set()
+    for row in alerts:
+        username = str(row.get("username") or "").lstrip("@")
+        reason = row.get("reason") or "split_failed"
+        post_url = row.get("post_url") or ""
+        lines.append(f"- @{username} — {reason} — {post_url}")
+        log_path = row.get("log_path")
+        if log_path:
+            seen_logs.add(str(log_path))
+    if seen_logs:
+        lines.append("")
+        for path in sorted(seen_logs):
+            lines.append(f"- Log: `{path}`")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def merge_report(
     path: Path,
     run_time: datetime,
@@ -97,6 +124,7 @@ def merge_report(
     window_note: str,
     stats_list: list[dict[str, Any]],
     new_cards: list[dict[str, Any]],
+    pattern_alerts: list[dict[str, Any]] | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     existing: dict[str, str] = {}
@@ -113,7 +141,13 @@ def merge_report(
         f"Ran {run_time.strftime('%H:%M')}, {window_note}. "
         f"Found {found_count}, scanned {scanned_count} sources.\n\n"
     )
-    body = header + render_sources(stats_list) + "\n## Vacancies\n\n"
+    body = (
+        header
+        + render_sources(stats_list)
+        + "\n"
+        + render_pattern_alerts(pattern_alerts or [])
+        + "## Vacancies\n\n"
+    )
     if ordered:
         body += "\n".join(block.rstrip() + "\n" for block in ordered)
     else:
