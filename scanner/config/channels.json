@@ -12,5 +12,10 @@
   "@Gamedevjobs",
   "@rabota_v_gamedeve",
   "@GameDEV",
-  "@gdjobs"
+  "@gdjobs",
+  {
+    "username": "@offerclaw",
+    "digest_pattern": "bullet_role_url"
+  },
+  "@gamedevjobs_pub"
 ]

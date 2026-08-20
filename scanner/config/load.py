@@ -74,6 +74,7 @@ def _normalize_channel(raw: Any, index: int) -> dict[str, Any]:
             "link": f"https://t.me/{username}",
             "enabled": True,
             "require_tags": [],
+            "digest_pattern": None,
         }
     if isinstance(raw, dict):
         user_raw = raw.get("user") or raw.get("username") or raw.get("link")
@@ -89,12 +90,16 @@ def _normalize_channel(raw: Any, index: int) -> dict[str, Any]:
         enabled = raw.get("enabled", True)
         if not isinstance(enabled, bool):
             raise ValueError(f"channels.json[{index}].enabled must be a boolean")
+        digest_pattern = raw.get("digest_pattern")
+        if digest_pattern is not None and not isinstance(digest_pattern, str):
+            raise ValueError(f"channels.json[{index}].digest_pattern must be a string")
         return {
             "id": str(raw.get("id") or idx),
             "name": str(raw.get("name") or username),
             "link": f"https://t.me/{username}",
             "enabled": enabled,
             "require_tags": [str(t) for t in tags],
+            "digest_pattern": digest_pattern,
         }
     raise ValueError(f"channels.json[{index}] must be a string or object")
 
@@ -108,6 +113,40 @@ def load_channels() -> list[dict[str, Any]]:
     else:
         raise ValueError("channels.json must be an array of @usernames")
     return [_normalize_channel(raw, i) for i, raw in enumerate(raw_list, start=1)]
+
+
+def load_digest_patterns() -> list[dict[str, Any]]:
+    data = _read_json(CONFIG_DIR / "digest_patterns.json")
+    if not isinstance(data, dict) or not isinstance(data.get("patterns"), list):
+        raise ValueError("digest_patterns.json must be an object with a patterns array")
+    patterns: list[dict[str, Any]] = []
+    for index, raw in enumerate(data["patterns"]):
+        if not isinstance(raw, dict):
+            raise ValueError(f"digest_patterns.json.patterns[{index}] must be an object")
+        pattern_id = raw.get("id")
+        if not isinstance(pattern_id, str) or not pattern_id.strip():
+            raise ValueError(f"digest_patterns.json.patterns[{index}].id must be a non-empty string")
+        start_line = raw.get("start_line")
+        if not isinstance(start_line, list) or not start_line:
+            raise ValueError(
+                f"digest_patterns.json.patterns[{index}].start_line must be a non-empty array"
+            )
+        skip_line = raw.get("skip_line", [])
+        if not isinstance(skip_line, list):
+            raise ValueError(f"digest_patterns.json.patterns[{index}].skip_line must be an array")
+        min_blocks = raw.get("min_blocks", 2)
+        if not isinstance(min_blocks, int) or min_blocks < 2:
+            raise ValueError(
+                f"digest_patterns.json.patterns[{index}].min_blocks must be an integer >= 2"
+            )
+        patterns.append({
+            "id": pattern_id.strip(),
+            "description": str(raw.get("description") or ""),
+            "start_line": [str(item) for item in start_line],
+            "skip_line": [str(item) for item in skip_line],
+            "min_blocks": min_blocks,
+        })
+    return patterns
 
 
 def load_env() -> tuple[int, str, Path]:

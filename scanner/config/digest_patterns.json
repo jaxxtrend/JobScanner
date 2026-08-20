@@ -1,0 +1,18 @@
+{
+  "patterns": [
+    {
+      "id": "bullet_role_url",
+      "description": "OfferClaw-style: bullet + Role — Company (url) + description until next bullet",
+      "start_line": [
+        "^[•\\-\\*]\\s+.+(https?://\\S+)"
+      ],
+      "skip_line": [
+        "^⸻+$",
+        "^Больше вакансий",
+        "^Вакансии для",
+        "^[💻🎮📱🌐🐍☕🤖]"
+      ],
+      "min_blocks": 2
+    }
+  ]
+}
