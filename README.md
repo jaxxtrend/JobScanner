@@ -21,17 +21,30 @@ The Telegram account used for login must already be subscribed to the channels l
 ## Config (edit JSON, not Python)
 
 - [`scanner/config/settings.json`](scanner/config/settings.json) — window, keyword lists, stopwords, resume_stopwords, domain markers, `rescan_hours`
-- [`scanner/config/channels.json`](scanner/config/channels.json) — list of `@usernames`. To skip a source, delete the line. Titles come from Telegram.
+- [`scanner/config/channels.json`](scanner/config/channels.json) — list of `@usernames` or objects. To skip a source, delete the line. Titles come from Telegram.
+- [`scanner/config/digest_patterns.json`](scanner/config/digest_patterns.json) — regex patterns that split multi-vacancy digests into per-job blocks
 
 ```json
 [
   "@cgfreelance",
-  "@devjobs"
+  "@devjobs",
+  { "username": "@offerclaw", "digest_pattern": "bullet_role_url" }
 ]
 ```
 
 Keywords in `settings.json` are job titles. Stack and contract type are `green` (highlight only).
 
+### Digest patterns
+
+Multi-link digests are split with patterns from `digest_patterns.json`. Each block is filtered on its own (keywords / stopwords / dedup). RVC vacancy links are also handled one card per URL.
+
+If a post looks like a digest but no pattern splits it, the scanner does **not** accept the whole post. It:
+
+1. logs a WARNING
+2. appends the full post to `scanner/logs/suspicious_digests_YYYY-MM-DD.md`
+3. adds a **Pattern alerts** section to the daily Markdown report
+
+Pass that suspicious log to an agent and ask to update `digest_patterns.json` (and optionally set `digest_pattern` on the channel).
 ## Run
 
 From the repo root:
