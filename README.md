@@ -49,7 +49,7 @@ Fill `.env`:
 
 The Telegram account used for login must already be subscribed to every channel in [`config/channels.json`](config/channels.json).
 
-Session file after first login: `scanner/sessions/` (not committed).
+Session file after first login: `cache/sessions/` (not committed). The `cache/` tree is created automatically on first run.
 
 ## Config (edit JSON under `config/`)
 
@@ -107,7 +107,7 @@ Some channels post **several vacancies in one message**. Definitions and binding
 **When a multi-job digest fails to split** (post has 2+ job-board vacancy URLs: LinkedIn jobs, OfferClaw vacancy, Greenhouse, …):
 
 1. Console WARNING  
-2. Full post appended to `scanner/logs/suspicious_digests_YYYY-MM-DD.md`  
+2. Full post appended to `cache/logs/suspicious_digests_YYYY-MM-DD.md`  
 3. **Pattern alerts** section in the daily Markdown report  
 
 Hand that suspicious log to an **AI agent** (e.g. Cursor). The agent should analyze the failed posts, add/fix a pattern, and update `bindings` in `config/digest_patterns.json`. The scanner itself does not call AI at runtime.
@@ -145,15 +145,15 @@ python scanner/main.py --channel cgfreelance
 | Channel without a cursor | last `last_days` days |
 | Channel with a cursor | new message ids **plus** the last `rescan_hours` (48) so recent edits are seen |
 
-Cursors: `scanner/state/cursors.json` (gitignored).
+Cursors: `cache/state/cursors.json` (gitignored).
 
 ## Output
 
 - Daily report: `output/YYYY-MM-DD.md`
 - Same-day re-run **merges** cards by post URL
-- Dedup across days: `scanner/sessions/dedup_cache.json`
-- Scan logs: `scanner/logs/scan_*.log`
-- Suspicious digests (for AI pattern updates): `scanner/logs/suspicious_digests_YYYY-MM-DD.md`
+- Dedup across days: `cache/sessions/dedup_cache.json`
+- Scan logs: `cache/logs/scan_*.log`
+- Suspicious digests (for AI pattern updates): `cache/logs/suspicious_digests_YYYY-MM-DD.md`
 
 ### Report sections
 
@@ -165,12 +165,18 @@ Cursors: `scanner/state/cursors.json` (gitignored).
 
 ```text
 config/                 # user + agent JSON (settings, channels, digest patterns)
+cache/                  # created on first run (sessions, state, logs)
 run.ps1                 # Windows launcher
 scanner/                # Python code (load.py under scanner/config/)
 output/                 # daily Markdown reports
-scanner/logs/           # scan + suspicious digest logs
-scanner/sessions/       # Telegram session + dedup cache
-scanner/state/          # cursors
+```
+
+`cache/` layout:
+
+```text
+cache/sessions/         # Telegram session + dedup cache
+cache/state/            # cursors
+cache/logs/             # scan + suspicious digest logs
 ```
 
 ## Local-only paths

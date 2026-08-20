@@ -1,10 +1,11 @@
 .env
+cache/
 sessions/
 scanner/sessions/
 scanner/state/
+scanner/logs/
 state/
 logs/
-scanner/logs/
 output/*.md
 __pycache__/
 *.pyc

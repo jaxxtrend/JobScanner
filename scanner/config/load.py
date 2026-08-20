@@ -12,9 +12,17 @@ from dotenv import load_dotenv
 SCANNER_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = SCANNER_DIR.parent
 CONFIG_DIR = REPO_ROOT / "config"
-SESSIONS_DIR = SCANNER_DIR / "sessions"
-STATE_DIR = SCANNER_DIR / "state"
-LOGS_DIR = SCANNER_DIR / "logs"
+CACHE_DIR = REPO_ROOT / "cache"
+SESSIONS_DIR = CACHE_DIR / "sessions"
+STATE_DIR = CACHE_DIR / "state"
+LOGS_DIR = CACHE_DIR / "logs"
+
+
+def ensure_cache_dirs() -> Path:
+    """Create cache/ and its subfolders on first run if missing."""
+    for path in (CACHE_DIR, SESSIONS_DIR, STATE_DIR, LOGS_DIR):
+        path.mkdir(parents=True, exist_ok=True)
+    return CACHE_DIR
 
 _SETTINGS_REQUIRED = (
     "last_days",

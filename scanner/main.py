@@ -23,6 +23,7 @@ from config.load import (
     LOGS_DIR,
     SESSIONS_DIR,
     STATE_DIR,
+    ensure_cache_dirs,
     load_channels,
     load_digest_config,
     load_env,
@@ -43,10 +44,11 @@ from utils.telegraph_parser import (
 )
 from utils.url_helpers import extract_links_from_text, message_url, normalize_url_for_dedup
 
+ensure_cache_dirs()
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
 _run_ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 _file_handler = logging.FileHandler(LOGS_DIR / f"scan_{_run_ts}.log", encoding="utf-8")
 _file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
