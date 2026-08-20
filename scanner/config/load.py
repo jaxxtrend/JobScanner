@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 SCANNER_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = SCANNER_DIR.parent
-CONFIG_DIR = Path(__file__).resolve().parent
+CONFIG_DIR = REPO_ROOT / "config"
 SESSIONS_DIR = SCANNER_DIR / "sessions"
 STATE_DIR = SCANNER_DIR / "state"
 LOGS_DIR = SCANNER_DIR / "logs"
@@ -74,13 +74,12 @@ def _normalize_channel(raw: Any, index: int) -> dict[str, Any]:
             "link": f"https://t.me/{username}",
             "enabled": True,
             "require_tags": [],
-            "digest_pattern": None,
         }
     if isinstance(raw, dict):
         user_raw = raw.get("user") or raw.get("username") or raw.get("link")
         if not user_raw:
             raise ValueError(
-                f"channels.json[{index}] needs a username string or "
+                f"channels.json[{index}] needs a t.me URL string or "
                 "object with user/username/link"
             )
         username = parse_telegram_username(str(user_raw))
@@ -90,16 +89,12 @@ def _normalize_channel(raw: Any, index: int) -> dict[str, Any]:
         enabled = raw.get("enabled", True)
         if not isinstance(enabled, bool):
             raise ValueError(f"channels.json[{index}].enabled must be a boolean")
-        digest_pattern = raw.get("digest_pattern")
-        if digest_pattern is not None and not isinstance(digest_pattern, str):
-            raise ValueError(f"channels.json[{index}].digest_pattern must be a string")
         return {
             "id": str(raw.get("id") or idx),
             "name": str(raw.get("name") or username),
             "link": f"https://t.me/{username}",
             "enabled": enabled,
             "require_tags": [str(t) for t in tags],
-            "digest_pattern": digest_pattern,
         }
     raise ValueError(f"channels.json[{index}] must be a string or object")
 
@@ -111,14 +106,29 @@ def load_channels() -> list[dict[str, Any]]:
     elif isinstance(data, dict) and isinstance(data.get("channels"), list):
         raw_list = data["channels"]
     else:
-        raise ValueError("channels.json must be an array of @usernames")
+        raise ValueError("channels.json must be an array of https://t.me/... links")
     return [_normalize_channel(raw, i) for i, raw in enumerate(raw_list, start=1)]
 
 
-def load_digest_patterns() -> list[dict[str, Any]]:
+def load_digest_config() -> tuple[dict[str, str], list[dict[str, Any]]]:
+    """Return (channel_username -> pattern_id, pattern definitions)."""
     data = _read_json(CONFIG_DIR / "digest_patterns.json")
     if not isinstance(data, dict) or not isinstance(data.get("patterns"), list):
         raise ValueError("digest_patterns.json must be an object with a patterns array")
+
+    raw_bindings = data.get("bindings", {})
+    if not isinstance(raw_bindings, dict):
+        raise ValueError("digest_patterns.json.bindings must be an object")
+    bindings: dict[str, str] = {}
+    for key, value in raw_bindings.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("digest_patterns.json.bindings keys must be non-empty strings")
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"digest_patterns.json.bindings[{key!r}] must be a non-empty pattern id"
+            )
+        bindings[parse_telegram_username(key).lower()] = value.strip()
+
     patterns: list[dict[str, Any]] = []
     for index, raw in enumerate(data["patterns"]):
         if not isinstance(raw, dict):
@@ -146,7 +156,14 @@ def load_digest_patterns() -> list[dict[str, Any]]:
             "skip_line": [str(item) for item in skip_line],
             "min_blocks": min_blocks,
         })
-    return patterns
+
+    pattern_ids = {p["id"] for p in patterns}
+    for channel, pattern_id in bindings.items():
+        if pattern_id not in pattern_ids:
+            raise ValueError(
+                f"digest_patterns.json.bindings[{channel!r}] points to unknown pattern {pattern_id!r}"
+            )
+    return bindings, patterns
 
 
 def load_env() -> tuple[int, str, Path]:

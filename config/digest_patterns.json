@@ -1,4 +1,8 @@
 {
+  "bindings": {
+    "offerclaw": "bullet_role_url",
+    "forgamedev": "linkedin_job_bullets"
+  },
   "patterns": [
     {
       "id": "bullet_role_url",
