@@ -95,8 +95,8 @@ def render_pattern_alerts(alerts: list[dict[str, Any]]) -> str:
     lines = [
         "## Pattern alerts",
         "",
-        "Digest posts could not be split. Update `scanner/config/digest_patterns.json` "
-        "using the suspicious digests log (pass the log to an agent).",
+        "Digest posts could not be split. Update `config/digest_patterns.json` "
+        "(bindings + patterns) using the suspicious digests log — hand it to an AI agent.",
         "",
     ]
     seen_logs: set[str] = set()

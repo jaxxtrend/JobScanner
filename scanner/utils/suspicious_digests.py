@@ -33,7 +33,8 @@ def append_suspicious_digest(
     if not path.exists():
         header = (
             f"# Suspicious digests {run_time.strftime('%Y-%m-%d')}\n\n"
-            "Pass this file to an agent to update `scanner/config/digest_patterns.json`.\n\n"
+            "Pass this file to an AI agent to analyze posts and update "
+            "`config/digest_patterns.json` (add/fix patterns and channel bindings).\n\n"
         )
         path.write_text(header + block, encoding="utf-8")
     else:
