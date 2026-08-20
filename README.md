@@ -1,8 +1,32 @@
 # JobScanner
 
-Telegram scanner for Technical Artist / pipeline / real-time optimization vacancies. Daily output is Markdown, not Excel. Tunable data lives in JSON.
+Telegram scanner for **Technical Artist / pipeline / real-time optimization** vacancies.
 
-`jobs_release/` is a local example from another search profile. It is gitignored and is not part of this repository.
+It reads channels you already follow, filters posts with JSON keyword lists, and writes a daily Markdown report. Tunable data lives in JSON — not in Python.
+
+## How it works
+
+```text
+channels.json  →  Telegram API  →  per message:
+  1. Telegraph page?     → split into jobs, filter each
+  2. RVC vacancy URLs?   → one candidate per link (API text)
+  3. Digest pattern hit? → one candidate per block
+  4. Else                → whole post as one candidate
+  → keywords / stopwords / resume_stopwords / near-dup / URL dedup
+  → output/YYYY-MM-DD.md
+```
+
+**Pass** means the candidate matched at least one `keywords` entry and did not hit `stopwords` / `resume_stopwords`, and is not a near-duplicate of an already accepted card.
+
+Report line per source:
+
+`ok @channel — N passed / M posts / D domain`
+
+| Field | Meaning |
+| --- | --- |
+| `posts` | Messages in the scan window with text |
+| `domain` | Posts that contain a `domain_markers` phrase (gamedev / Unity / …) — topic signal, not web domains |
+| `passed` | Vacancies that became cards |
 
 ## Setup
 
@@ -16,31 +40,73 @@ Fill `.env`:
 - `TG_API_ID` and `TG_API_HASH` from [my.telegram.org](https://my.telegram.org/auth)
 - `OUTPUT_PATH` — optional; defaults to `output/` in the repo
 
-The Telegram account used for login must already be subscribed to the channels listed in `scanner/config/channels.json`.
+The Telegram account used for login must already be subscribed to every channel in `scanner/config/channels.json`.
+
+Session file after first login: `scanner/sessions/` (not committed).
 
 ## Config (edit JSON, not Python)
 
-- [`scanner/config/settings.json`](scanner/config/settings.json) — window, keyword lists, stopwords, resume_stopwords, domain markers, `rescan_hours`
-- [`scanner/config/channels.json`](scanner/config/channels.json) — list of `@usernames` or objects. To skip a source, delete the line. Titles come from Telegram.
-- [`scanner/config/digest_patterns.json`](scanner/config/digest_patterns.json) — regex patterns that split multi-vacancy digests into per-job blocks
+| File | Role |
+| --- | --- |
+| [`scanner/config/settings.json`](scanner/config/settings.json) | Window, keywords, green/red, stopwords, resume_stopwords, domain markers, thresholds |
+| [`scanner/config/channels.json`](scanner/config/channels.json) | Sources to scan |
+| [`scanner/config/digest_patterns.json`](scanner/config/digest_patterns.json) | How to split multi-vacancy digests |
+
+### Channels
+
+List of `@usernames`, or objects when a digest pattern is pinned:
 
 ```json
 [
   "@cgfreelance",
   "@devjobs",
-  { "username": "@offerclaw", "digest_pattern": "bullet_role_url" }
+  { "username": "@offerclaw", "digest_pattern": "bullet_role_url" },
+  { "username": "@forgamedev", "digest_pattern": "linkedin_job_bullets" }
 ]
 ```
 
-Keywords in `settings.json` are job titles. Stack and contract type are `green` (highlight only).
+- Delete a line to skip a source. Titles are taken from Telegram at scan time.
+- Optional object fields: `enabled`, `require_tags`, `digest_pattern`.
+
+### Filters (`settings.json`)
+
+| List | Role |
+| --- | --- |
+| `keywords` | Job titles that must appear (required to pass) |
+| `green` | Stack / contract highlights only (shown on the card, does not gate pass) |
+| `redwords` | Flags on the card (does not reject) |
+| `stopwords` | Reject the candidate |
+| `resume_stopwords` | Reject resume / “looking for work” posts |
+| `domain_markers` | Count toward the `domain` stat only |
+
+Also: `last_days`, `rescan_hours`, `letters_limit` (keyword search window in text), `near_dup_threshold`, `groups_limit`.
 
 ### Digest patterns
 
-The scanner always tries patterns from `digest_patterns.json`. If a pattern yields 2+ blocks, each block is filtered on its own.
+Some channels post **several vacancies in one message**. Patterns in `digest_patterns.json` split those into blocks; each block is filtered alone.
 
-Alerts (`suspicious_digests_*.md` + **Pattern alerts**) fire only when the post has **2+ job-board vacancy URLs** (LinkedIn jobs, OfferClaw vacancy, Greenhouse, etc.) and no pattern splits it. Ordinary single vacancies with portfolio/YouTube/forms links are not treated as digests.
+Built-in pattern ids:
 
-Pass the suspicious log to an agent to update `digest_patterns.json` (and optionally set `digest_pattern` on the channel). RVC vacancy links are handled one card per URL.
+- `bullet_role_url` — OfferClaw-style `• Role — Company (url)`
+- `linkedin_job_bullets` — Forgamedev-style `🔹Role` / markdown LinkedIn job links
+
+Flow:
+
+1. Try patterns (channel `digest_pattern` first, then the rest).
+2. If a pattern yields **2+ blocks** → filter each block.
+3. Else if the post has **2+ job-board vacancy URLs** (LinkedIn jobs, OfferClaw vacancy, Greenhouse, Lever, HH, …) and nothing split it → **do not** accept the whole post; write an alert instead.
+4. Else → treat as a normal single post (even if it has portfolio / YouTube / forms links).
+
+**Pattern miss workflow**
+
+1. Console WARNING
+2. Append full post to `scanner/logs/suspicious_digests_YYYY-MM-DD.md`
+3. Section **Pattern alerts** in the daily Markdown report
+
+Pass that suspicious log to an agent and ask to update `digest_patterns.json` (and optionally set `digest_pattern` on the channel). There is no AI inside the scanner runtime.
+
+**Telegraph** (`telegra.ph`) and **RVC** (`app.rvc.global/vacancy/...`) have their own splitters: Telegraph jobs and one card per RVC link.
+
 ## Run
 
 From the repo root:
@@ -50,18 +116,34 @@ python scanner/main.py
 python scanner/main.py --days 10
 python scanner/main.py --channel 1
 python scanner/main.py --channel cgfreelance
+python scanner/main.py --channel offerclaw
 ```
 
-First login asks for phone number and Telegram code. Session file: `scanner/sessions/` (not committed).
+`--channel` accepts a username, a 1-based index from `channels.json`, or a range like `1-3`.
 
 ## Scan window
 
-- Channel without a cursor: last `last_days` days
-- Channel with a cursor: new message ids plus the last `rescan_hours` (48) hours so recent edits are seen
-- Cursors: `scanner/state/cursors.json` (gitignored)
+| Case | Window |
+| --- | --- |
+| Channel without a cursor | last `last_days` days |
+| Channel with a cursor | new message ids **plus** the last `rescan_hours` (48) so recent edits are seen |
+
+Cursors: `scanner/state/cursors.json` (gitignored).
 
 ## Output
 
-`output/YYYY-MM-DD.md`. A second run on the same day merges cards by post URL and does not drop earlier cards. Edited posts that reappear update the existing card.
+- Daily report: `output/YYYY-MM-DD.md`
+- Same-day re-run **merges** cards by post URL (earlier cards are kept; edited posts update the existing card)
+- Dedup across days: `scanner/sessions/dedup_cache.json` — first vacancy URL in the text, or the Telegram post URL when there is no external link
+- Scan logs: `scanner/logs/scan_*.log`
+- Suspicious digests: `scanner/logs/suspicious_digests_YYYY-MM-DD.md`
 
-Dedup across days uses `scanner/sessions/dedup_cache.json`: the first vacancy URL in the text, or the Telegram post URL when there is no external link. The 48-hour rescan window therefore does not reprint the same cards on a later date.
+### Report sections
+
+1. **Sources** — per-channel status and counters  
+2. **Pattern alerts** — only when multi-job digests failed to split (if any)  
+3. **Vacancies** — cards with post link, salary, keywords, green, flags, links, text  
+
+## Local-only paths
+
+`jobs_release/` is a local example from another search profile. It is gitignored and is not part of this repository.
