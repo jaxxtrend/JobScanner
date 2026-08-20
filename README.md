@@ -2,7 +2,7 @@
 
 Telegram scanner for **Technical Artist / pipeline / real-time optimization** vacancies.
 
-Reads channels you already follow, filters posts with JSON keyword lists, writes a daily Markdown report. Tunable data lives in repo-root [`config/`](config/) — not in Python. Runtime data lives in [`cache/`](cache/) (created on first run, gitignored).
+Reads channels listed in [`config/channels.json`](config/channels.json), filters posts with JSON keyword lists, writes a daily Markdown report. Tunable data lives in repo-root [`config/`](config/) — not in Python. Runtime data lives in [`cache/`](cache/) (created on first run, gitignored).
 
 ## Quick start
 
@@ -25,7 +25,23 @@ python -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
 ```
 
-The Telegram account must already be subscribed to every channel in [`config/channels.json`](config/channels.json).
+### First login (once)
+
+`TG_API_ID` / `TG_API_HASH` only identify the **app** to Telegram. The scanner still needs to log in as **your user account** (Telethon user session, not a bot).
+
+On the first `.\run.ps1`:
+
+1. Telethon may prompt `Please enter your phone (or bot token):` — that “(or bot token)” text is generic Telethon wording. Enter your Telegram number in international format (e.g. `+79991234567`). Do **not** paste a bot token; this project does not use bots.
+2. Enter the login code Telegram sends you (SMS or in-app).
+3. If 2FA is enabled, enter your cloud password.
+
+A session file is written to `cache/sessions/my_account.session`. Later runs reuse it and skip the phone prompt.
+
+After login Telethon may print a ToS reminder — normal. Sources come from [`config/channels.json`](config/channels.json), not from your join list. Public channels are usually readable by username; private ones need membership (report status `private … — join the chat first`).
+
+### API usage
+
+The scanner is **on-demand** (one pass per `.\run.ps1`, not a daemon). History is bounded by `last_days` / cursors (`rescan_hours` for edits); Telethon’s per-channel fetch cap (20k) is only a safety ceiling. If Telegram returns `FloodWait`, the scanner sleeps for the requested time and retries that channel once. Avoid running it in a tight loop.
 
 ## How it works
 
@@ -153,9 +169,11 @@ Report sections: **Sources** → **Pattern alerts** (if any) → **Vacancies**.
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `TG_API_ID` | yes | from [my.telegram.org](https://my.telegram.org/auth) |
+| `TG_API_ID` | yes | from [my.telegram.org](https://my.telegram.org/auth) — app credentials only |
 | `TG_API_HASH` | yes | same |
 | `OUTPUT_PATH` | no | defaults to `output/` |
+
+Phone number and login code are **not** env vars: Telethon asks for them interactively on first run and stores the session under `cache/sessions/`.
 
 `--channel` accepts a username, a 1-based index from `channels.json`, or a range like `1-3`.
 
