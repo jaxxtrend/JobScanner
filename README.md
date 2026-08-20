@@ -1,6 +1,6 @@
 # JobScanner
 
-Telegram scanner for **Technical Artist / pipeline / real-time optimization** vacancies.
+Telegram vacancy scanner driven by your own config: channels, keywords, and filters. The committed defaults target **Technical Artist / pipeline / real-time optimization** — retune [`config/`](config/) for any role or search profile.
 
 Reads channels listed in [`config/channels.json`](config/channels.json), filters posts with JSON keyword lists, writes a daily Markdown report. Tunable data lives in repo-root [`config/`](config/) — not in Python. Runtime data lives in [`cache/`](cache/) (created on first run, gitignored).
 
