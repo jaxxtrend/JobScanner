@@ -24,6 +24,7 @@ from config.load import (
     SESSIONS_DIR,
     STATE_DIR,
     load_channels,
+    load_digest_patterns,
     load_env,
     load_settings,
     parse_telegram_username,
@@ -31,8 +32,10 @@ from config.load import (
 from utils.cursors import last_id_for, load_cursors, save_cursors
 from utils.dedup_cache import load_seen_links, save_seen_links
 from utils.extract_salary import Salary, extract_salary
+from utils.job_splitter import is_digest_candidate, split_digest
 from utils.markdown_writer import merge_report
-from utils.rvc_parser import enrich_message_with_rvc
+from utils.rvc_parser import enrich_message_with_rvc, iter_rvc_vacancies
+from utils.suspicious_digests import append_suspicious_digest, pattern_alert_row
 from utils.telegraph_parser import (
     extract_telegraph_links_from_message,
     fetch_telegraph_page,
@@ -207,6 +210,9 @@ async def iter_channel_messages(
     last_id: int | None,
     seen_links: set[str],
     accepted_texts: dict[str, list[str]],
+    digest_patterns: list[dict[str, Any]],
+    pattern_alerts: list[dict[str, Any]],
+    run_time: datetime,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int | None]:
     results: list[dict[str, Any]] = []
     total = 0
@@ -295,36 +301,109 @@ async def iter_channel_messages(
                     ))
             continue
 
-        enriched, _rvc = enrich_message_with_rvc(content)
-        links = extract_links_from_text(content)
-        if not try_accept_text(
-            keyword_text=content,
-            full_text=enriched,
-            source_key=source_key,
-            settings=settings,
-            seen_links=seen_links,
-            accepted_texts=accepted_texts,
-            links=links,
-            post_url=msg_url,
-        ):
-            continue
+        candidates: list[dict[str, Any]] = []
+        covered_urls: set[str] = set()
 
-        matched = get_unique_keywords(settings["keywords"], text_lc[: settings["letters_limit"]])
-        if len(links) > 3:
-            links = links[:3]
-        passed += 1
-        results.append(build_card(
-            date_value=msg.date,
-            source_name=source_name,
-            source_username=src["username"],
-            post=msg_url,
-            text=enriched,
-            keywords=matched,
-            green=get_unique_keywords(settings["green"], enriched.lower()),
-            flags=get_unique_keywords(settings["redwords"], enriched.lower()),
-            links=links,
-            salary=extract_salary(enriched),
-        ))
+        for rvc_url, rvc_text in iter_rvc_vacancies(content):
+            covered_urls.add(normalize_url_for_dedup(rvc_url))
+            candidates.append({
+                "keyword_text": rvc_text,
+                "full_text": rvc_text,
+                "links": [rvc_url],
+                "post_url": rvc_url,
+            })
+
+        if is_digest_candidate(content):
+            blocks, matched_id = split_digest(
+                content,
+                digest_patterns,
+                src.get("digest_pattern"),
+            )
+            if blocks is None:
+                reason = "no_pattern" if not digest_patterns else "split_failed"
+                log.warning(
+                    "@%s pattern miss (%s) — see suspicious digests log",
+                    str(src["username"]).lstrip("@"),
+                    reason,
+                )
+                log_path = append_suspicious_digest(
+                    LOGS_DIR,
+                    run_time,
+                    username=str(src["username"]),
+                    post_url=msg_url,
+                    reason=reason,
+                    text=content,
+                )
+                pattern_alerts.append(pattern_alert_row(
+                    username=str(src["username"]),
+                    post_url=msg_url,
+                    reason=reason,
+                    log_path=log_path,
+                ))
+            else:
+                log.info(
+                    "Digest split @%s with pattern %s into %s blocks",
+                    str(src["username"]).lstrip("@"),
+                    matched_id,
+                    len(blocks),
+                )
+                for index, block in enumerate(blocks, start=1):
+                    block_links = extract_links_from_text(block)
+                    primary = normalize_url_for_dedup(block_links[0]) if block_links else ""
+                    if primary and primary in covered_urls:
+                        continue
+                    if primary:
+                        covered_urls.add(primary)
+                    card_url = block_links[0] if block_links else f"{msg_url}#{index}"
+                    candidates.append({
+                        "keyword_text": block,
+                        "full_text": block,
+                        "links": block_links,
+                        "post_url": card_url,
+                    })
+        elif not candidates:
+            enriched, _rvc = enrich_message_with_rvc(content)
+            links = extract_links_from_text(content)
+            candidates.append({
+                "keyword_text": content,
+                "full_text": enriched,
+                "links": links,
+                "post_url": msg_url,
+            })
+
+        for candidate in candidates:
+            cand_links = list(candidate["links"])
+            if not try_accept_text(
+                keyword_text=candidate["keyword_text"],
+                full_text=candidate["full_text"],
+                source_key=source_key,
+                settings=settings,
+                seen_links=seen_links,
+                accepted_texts=accepted_texts,
+                links=cand_links,
+                post_url=candidate["post_url"],
+            ):
+                continue
+            matched = get_unique_keywords(
+                settings["keywords"],
+                candidate["keyword_text"].lower()[: settings["letters_limit"]],
+            )
+            if len(cand_links) > 3:
+                cand_links = cand_links[:3]
+            passed += 1
+            full_text = candidate["full_text"]
+            results.append(build_card(
+                date_value=msg.date,
+                source_name=source_name,
+                source_username=src["username"],
+                post=candidate["post_url"],
+                text=full_text,
+                keywords=matched,
+                green=get_unique_keywords(settings["green"], full_text.lower()),
+                flags=get_unique_keywords(settings["redwords"], full_text.lower()),
+                links=cand_links,
+                salary=extract_salary(full_text),
+            ))
 
     status = "ok"
     if total == 0:
@@ -349,20 +428,25 @@ async def scan_channel_with_retry(
     last_id: int | None,
     seen_links: set[str],
     accepted_texts: dict[str, list[str]],
+    digest_patterns: list[dict[str, Any]],
+    pattern_alerts: list[dict[str, Any]],
+    run_time: datetime,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int | None]:
     links_snap = set(seen_links)
     accepted_snap = {key: list(vals) for key, vals in accepted_texts.items()}
+    alerts_snap_len = len(pattern_alerts)
 
     def restore_dedup() -> None:
         seen_links.clear()
         seen_links.update(links_snap)
         accepted_texts.clear()
         accepted_texts.update({key: list(vals) for key, vals in accepted_snap.items()})
+        del pattern_alerts[alerts_snap_len:]
 
     try:
         return await iter_channel_messages(
             client, src, settings, date_from, rescan_since, last_id,
-            seen_links, accepted_texts,
+            seen_links, accepted_texts, digest_patterns, pattern_alerts, run_time,
         )
     except FloodWaitError as exc:
         log.warning("FloodWait %ss for %s — sleeping", exc.seconds, src["name"])
@@ -371,7 +455,7 @@ async def scan_channel_with_retry(
         try:
             return await iter_channel_messages(
                 client, src, settings, date_from, rescan_since, last_id,
-                seen_links, accepted_texts,
+                seen_links, accepted_texts, digest_patterns, pattern_alerts, run_time,
             )
         except Exception as retry_exc:
             restore_dedup()
@@ -416,6 +500,9 @@ async def scan_messages(
     date_from = datetime.now(timezone.utc) - timedelta(days=days)
     rescan_since = datetime.now(timezone.utc) - timedelta(hours=settings["rescan_hours"])
     channels_cfg = load_channels()
+    digest_patterns = load_digest_patterns()
+    run_time = datetime.now()
+    pattern_alerts: list[dict[str, Any]] = []
 
     if channel_id:
         wanted = {item.lower().lstrip("@") for item in parse_channel_ids(channel_id)}
@@ -449,6 +536,7 @@ async def scan_messages(
             "link": group_info["link"],
             "type": chat_type,
             "require_tags": group_info.get("require_tags") or [],
+            "digest_pattern": group_info.get("digest_pattern"),
             "category": group_info.get("category", ""),
         })
 
@@ -470,7 +558,7 @@ async def scan_messages(
             first_run_channels += 1
         channel_results, stats, max_id = await scan_channel_with_retry(
             client, src, settings, date_from, rescan_since, last_id,
-            seen_links, accepted_texts,
+            seen_links, accepted_texts, digest_patterns, pattern_alerts, run_time,
         )
         results.extend(channel_results)
         stats_list.append(stats)
@@ -480,6 +568,11 @@ async def scan_messages(
     stats_list.sort(key=lambda row: (0 if row["status"] == "ok" else 1, -row["passed"]))
     duration = time.perf_counter() - start_all
     log.info("Found %s vacancies in %.2fs", len(results), duration)
+    if pattern_alerts:
+        log.warning(
+            "%s digest pattern alert(s) — update digest_patterns.json from suspicious log",
+            len(pattern_alerts),
+        )
 
     if first_run_channels == len(selected) and selected:
         window_note = f"window first-run {days} days"
@@ -488,7 +581,6 @@ async def scan_messages(
     else:
         window_note = f"window new + {settings['rescan_hours']}h"
 
-    run_time = datetime.now()
     report_path = output_path / f"{run_time.strftime('%Y-%m-%d')}.md"
     results.sort(key=lambda row: row.get("date", ""), reverse=True)
     save_seen_links(seen_links, cache_path)
@@ -501,6 +593,7 @@ async def scan_messages(
         window_note,
         stats_list,
         results,
+        pattern_alerts,
     )
     log.info("Markdown saved: %s", report_path)
 
