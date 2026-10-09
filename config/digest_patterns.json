@@ -1,7 +1,9 @@
 {
   "bindings": {
     "offerclaw": "bullet_role_url",
-    "forgamedev": "linkedin_job_bullets"
+    "forgamedev": "linkedin_job_bullets",
+    "young_gamedev": "wantapply_bold_links",
+    "rabota_v_gamedeve": "vacancy_dash_blocks"
   },
   "patterns": [
     {
@@ -28,6 +30,32 @@
         "^[•\\-\\*]\\s*.+\\(https?://\\S*linkedin\\.com/jobs/\\S*\\)"
       ],
       "skip_line": [],
+      "min_blocks": 2
+    },
+    {
+      "id": "wantapply_bold_links",
+      "description": "young_gamedev-style: [**Role / Company**](url) per vacancy (optional 1️⃣ or • prefix); single posts start with **Role / Company** + 'Другие вакансии' bullets",
+      "start_line": [
+        "^(?:[0-9]️?⃣\\s*)?\\[\\*\\*.+?\\]\\(https?://[^\\s)]+\\)",
+        "^[•\\-\\*]\\s*\\[[^\\]]+\\]\\(https?://[^\\s)]+\\)",
+        "^\\*\\*[^*\\]]+\\s/\\s[^*\\]]+\\*\\*"
+      ],
+      "skip_line": [
+        "^#дайджест",
+        "^__.+__$",
+        "^\\**Другие вакансии"
+      ],
+      "min_blocks": 2
+    },
+    {
+      "id": "vacancy_dash_blocks",
+      "description": "rabota_v_gamedeve-style: 'Вакансия - Role' header per vacancy, blocks separated by ***** lines",
+      "start_line": [
+        "^Вакансия\\s*[-–—:]\\s*\\S"
+      ],
+      "skip_line": [
+        "^\\*{5,}$"
+      ],
       "min_blocks": 2
     }
   ]
