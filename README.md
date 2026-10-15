@@ -57,6 +57,8 @@ config/channels.json  →  Telegram API  →  per message:
 
 **Pass** = matched at least one `keywords` entry, no `stopwords` / `resume_stopwords`, not a near-duplicate of an already accepted card.
 
+Each rejected candidate is counted by reason (`Rejects @channel: ...` in the scan log); rejected candidates that contain a `domain_markers` word are also logged with a short snippet, so you can see what the filters drop.
+
 Source line in the report:
 
 `ok @channel — N passed / M posts / D domain`
@@ -108,11 +110,11 @@ Objects are allowed only for rare flags (`enabled`, `require_tags`) — not for 
 
 | List | Role |
 | --- | --- |
-| `keywords` | Required job-title matches to pass |
+| `keywords` | Required matches to pass; matched from the start of a word in the first `letters_limit` characters (`tech art` matches `tech artist`, `unity` does not match `community`) |
 | `green` | Stack / contract highlights on the card (does not gate pass) |
 | `redwords` | Flags on the card (does not reject) |
-| `stopwords` | Reject |
-| `resume_stopwords` | Reject resume / “looking for work” posts |
+| `stopwords` | Reject; whole words or phrases only (`intern` does not match `internal`) |
+| `resume_stopwords` | Reject resume / “looking for work” posts; whole words or phrases only |
 | `domain_markers` | Count toward the `domain` stat only |
 
 Also: `last_days`, `rescan_hours`, `letters_limit`, `near_dup_threshold`, `groups_limit`.

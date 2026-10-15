@@ -1,7 +1,7 @@
 {
   "last_days": 10,
   "groups_limit": 24,
-  "letters_limit": 380,
+  "letters_limit": 1000,
   "min_relevance": 1,
   "near_dup_threshold": 0.85,
   "rescan_hours": 48,
@@ -16,7 +16,33 @@
     "optimization specialist",
     "asset qa",
     "3d generalist",
-    "vr technical artist"
+    "vr technical artist",
+    "technical art",
+    "техарт",
+    "тех-арт",
+    "тех арт",
+    "технический артист",
+    "техартист",
+    "technical animator",
+    "теханиматор",
+    "3d artist",
+    "3d-artist",
+    "3d художник",
+    "3d-художник",
+    "3d-артист",
+    "environment artist",
+    "vfx",
+    "shader",
+    "шейдер",
+    "houdini",
+    "procedural",
+    "unity",
+    "unreal",
+    "tools programmer",
+    "tools developer",
+    "tool developer",
+    "оптимизац",
+    "optimization"
   ],
   "green": [
     "Unity",
@@ -46,10 +72,11 @@
     "Гибрид",
     "Character Artist"
   ],
-    "stopwords": [
+  "stopwords": [
     "джун",
     "стажер",
     "стажёр",
+    "джуниор",
     "Junior",
     "intern",
     "Associate",
@@ -60,10 +87,12 @@
     "бизнес аналитик",
     "Data Scientist",
     "Frontend",
-    "Москва",
-    "Офис",
     "удалённо из РФ",
-    "удаленно из РФ"
+    "удаленно из РФ",
+    "только офис",
+    "только в офисе",
+    "офис в Москве",
+    "office only"
   ],
   "resume_stopwords": [
     "ищу работу",
