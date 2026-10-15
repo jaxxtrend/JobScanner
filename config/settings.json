@@ -1,7 +1,7 @@
 {
   "last_days": 10,
   "groups_limit": 24,
-  "letters_limit": 1000,
+  "letters_limit": 1500,
   "min_relevance": 1,
   "near_dup_threshold": 0.85,
   "rescan_hours": 48,
@@ -30,19 +30,20 @@
     "3d художник",
     "3d-художник",
     "3d-артист",
+    "3d артист",
     "environment artist",
     "vfx",
     "shader",
     "шейдер",
     "houdini",
     "procedural",
-    "unity",
-    "unreal",
     "tools programmer",
     "tools developer",
     "tool developer",
-    "оптимизац",
-    "optimization"
+    "art lead",
+    "lead artist",
+    "арт-лид",
+    "арт лид"
   ],
   "green": [
     "Unity",
