@@ -55,8 +55,21 @@ _file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(mess
 logging.getLogger().addHandler(_file_handler)
 
 
+def starts_word(phrase: str, text: str) -> bool:
+    """True if phrase occurs in text starting at a word boundary ("tech art" matches "tech artist", "unity" does not match "community")."""
+    return re.search(r"(?<!\w)" + re.escape(phrase.lower()), text) is not None
+
+
+def find_whole_phrase(phrases: list[str], text: str) -> str | None:
+    """First phrase found in text as a whole word or phrase ("intern" does not match "internal")."""
+    for phrase in phrases:
+        if re.search(r"(?<!\w)" + re.escape(phrase.lower()) + r"(?!\w)", text):
+            return phrase
+    return None
+
+
 def get_unique_keywords(source_list: list[str], search_text: str) -> list[str]:
-    found = [kw.lower() for kw in source_list if kw.lower() in search_text]
+    found = [kw.lower() for kw in source_list if starts_word(kw, search_text)]
     unique: dict[str, str] = {}
     for item in found:
         normalized = item.replace(" ", "").replace("-", "").replace("_", "")
@@ -177,30 +190,50 @@ def try_accept_text(
     accepted_texts: dict[str, list[str]],
     links: list[str],
     post_url: str,
-) -> bool:
+) -> str | None:
+    """Return None if the text is accepted, otherwise the reject reason."""
     full_lc = full_text.lower()
-    reject_phrases = settings["stopwords"] + settings["resume_stopwords"]
-    if any(kw.lower() in full_lc for kw in reject_phrases):
-        return False
+    stopword = find_whole_phrase(settings["stopwords"], full_lc)
+    if stopword:
+        return f"stopword:{stopword}"
+    resume_word = find_whole_phrase(settings["resume_stopwords"], full_lc)
+    if resume_word:
+        return f"resume:{resume_word}"
     matched = get_unique_keywords(
         settings["keywords"], keyword_text.lower()[: settings["letters_limit"]]
     )
     if not matched:
-        return False
+        return "no_keyword"
     primary = normalize_url_for_dedup(links[0] if links else post_url)
     post_key = normalize_url_for_dedup(post_url)
     if not primary:
-        return False
+        return "no_link"
     if primary in seen_links or (post_key and post_key in seen_links):
-        return False
+        return "seen_link"
     seen_links.add(primary)
     if post_key:
         seen_links.add(post_key)
     norm = normalize_text_for_sim(full_text)
     if is_near_duplicate(norm, accepted_texts.get(source_key, []), settings["near_dup_threshold"]):
-        return False
+        return "near_duplicate"
     accepted_texts.setdefault(source_key, []).append(norm)
-    return True
+    return None
+
+
+def note_reject(
+    rejects: dict[str, int],
+    reason: str,
+    username: str,
+    text: str,
+    settings: dict[str, Any],
+) -> None:
+    """Count a reject and log domain-relevant ones, so filter tuning has evidence."""
+    kind = reason.split(":", 1)[0]
+    rejects[kind] = rejects.get(kind, 0) + 1
+    text_lc = text.lower()
+    if any(marker.lower() in text_lc for marker in settings["domain_markers"]):
+        snippet = " ".join(text.split())[:160]
+        log.info("Reject @%s %s: %s", username.lstrip("@"), reason, snippet)
 
 
 async def iter_channel_messages(
@@ -221,6 +254,7 @@ async def iter_channel_messages(
     total = 0
     passed = 0
     domain = 0
+    rejects: dict[str, int] = {}
     max_id = last_id
     cut_by_date = False
     chat_type = src["type"]
@@ -279,7 +313,7 @@ async def iter_channel_messages(
                         settings["keywords"], job_text.lower()[: settings["letters_limit"]]
                     )
                     card_url = job_links[0] if job_links else f"{msg_url}#telegraph"
-                    if not try_accept_text(
+                    reason = try_accept_text(
                         keyword_text=job_text,
                         full_text=job_text,
                         source_key=source_key,
@@ -288,7 +322,9 @@ async def iter_channel_messages(
                         accepted_texts=accepted_texts,
                         links=job_links,
                         post_url=card_url,
-                    ):
+                    )
+                    if reason:
+                        note_reject(rejects, reason, str(src["username"]), job_text, settings)
                         continue
                     passed += 1
                     results.append(build_card(
@@ -376,7 +412,7 @@ async def iter_channel_messages(
 
         for candidate in candidates:
             cand_links = list(candidate["links"])
-            if not try_accept_text(
+            reason = try_accept_text(
                 keyword_text=candidate["keyword_text"],
                 full_text=candidate["full_text"],
                 source_key=source_key,
@@ -385,7 +421,9 @@ async def iter_channel_messages(
                 accepted_texts=accepted_texts,
                 links=cand_links,
                 post_url=candidate["post_url"],
-            ):
+            )
+            if reason:
+                note_reject(rejects, reason, str(src["username"]), candidate["keyword_text"], settings)
                 continue
             matched = get_unique_keywords(
                 settings["keywords"],
@@ -408,6 +446,12 @@ async def iter_channel_messages(
                 salary=extract_salary(full_text),
             ))
 
+    if rejects:
+        log.info(
+            "Rejects @%s: %s",
+            str(src["username"]).lstrip("@"),
+            ", ".join(f"{kind} {count}" for kind, count in sorted(rejects.items())),
+        )
     status = "ok"
     if total == 0:
         status = "no_messages_in_window" if cut_by_date or last_id is not None else "channel_silent"
